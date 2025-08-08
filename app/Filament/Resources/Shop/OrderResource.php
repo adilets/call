@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Shop;
 use Akaunting\Money\Currency;
 use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
-use App\Filament\Resources\Shop\ProductResource;
 use App\Filament\Resources\Shop\OrderResource\Pages;
 use App\Forms\Components\AddressForm;
 use App\Models\Order;
@@ -19,10 +18,12 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Tables\Actions\Action as TableAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\HtmlString;
 
 class OrderResource extends Resource
 {
@@ -207,6 +208,80 @@ class OrderResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+
+                TableAction::make('paymentInfo')
+                    ->label('Payment')
+                    ->icon('heroicon-o-currency-dollar')
+                    ->modalHeading('Send payment link')
+                    ->modalSubmitAction(false)
+                    ->modalWidth('lg')
+                    ->form([
+                        Forms\Components\TextInput::make('payment_link')
+                            ->label('Payment link')
+                            ->default(fn ($record) => 'https://payeasy.pro/' . $record->id)
+                            ->readOnly()
+                            ->extraAttributes([
+                                'x-data' => '{}',
+                            ])
+                            ->extraInputAttributes([
+                                'x-ref' => 'paylink',
+                            ])
+                            ->suffixAction(
+                                Forms\Components\Actions\Action::make('copy')
+                                    ->icon('heroicon-o-clipboard')
+                                    ->action(function () {
+                                        Notification::make()
+                                            ->title('Link copied')
+                                            ->success()
+                                            ->send();
+                                    })
+                                    ->extraAttributes([
+                                        'x-data' => '{}',
+                                        'x-on:click' => new HtmlString('navigator.clipboard.writeText($refs.paylink ? $refs.paylink.value : \'\')'),
+                                    ])
+                            ),
+
+                        Forms\Components\Placeholder::make('tip')
+                            ->label('')
+                            ->content('Choose an option below to send the payment link.'),
+                    ])
+                    ->extraModalFooterActions([
+                        TableAction::make('sendSms')
+                            ->label('Send SMS')
+                            ->icon('heroicon-o-chat-bubble-left-right')
+                            ->color('warning')
+                            ->extraAttributes([
+                                'x-data' => '{ sent: false }',
+                                'x-on:click' => new HtmlString('if (!sent) { sent = true }'),
+                                'x-bind:disabled' => 'sent',
+                                'x-bind:class' => new HtmlString("{ 'opacity-50 cursor-not-allowed': sent }"),
+                                'type' => 'button',
+                                'title' => 'Send payment link via SMS',
+                            ])
+                            ->action(function ($record) {
+                                // app(\App\Services\SmsService::class)->send($record->customer_phone, "Pay order #{$record->id}: {$link}");
+                                Notification::make()->title('SMS sent')->success()->send();
+                            }),
+
+                        TableAction::make('sendEmail')
+                            ->label('Send Email')
+                            ->icon('heroicon-o-envelope')
+                            ->color('success')
+                            ->extraAttributes([
+                                'x-data' => '{ sent: false }',
+                                'x-on:click' => new HtmlString('if (!sent) { sent = true }'),
+                                'x-bind:disabled' => 'sent',
+                                'x-bind:class' => new HtmlString("{ 'opacity-50 cursor-not-allowed': sent }"),
+                                'type' => 'button',
+                                'title' => 'Send payment link via email',
+                            ])
+                            ->action(function ($record) {
+
+                                // Mail::to($record->customer_email)->send(new \App\Mail\PaymentLinkMail($record, $link));
+
+                                Notification::make()->title('Email sent')->success()->send();
+                            }),
+                    ])
             ])
             ->groupedBulkActions([
                 Tables\Actions\DeleteBulkAction::make()
