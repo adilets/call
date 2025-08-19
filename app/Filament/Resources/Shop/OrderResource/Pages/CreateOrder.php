@@ -4,8 +4,12 @@ namespace App\Filament\Resources\Shop\OrderResource\Pages;
 
 use App\Filament\Resources\Shop\OrderResource;
 use App\Models\CurrencyRate;
+use App\Models\PaymentLink;
 use App\Models\ShippingMethod;
+use App\Services\PayEasyService;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class CreateOrder extends CreateRecord
 {
@@ -13,8 +17,11 @@ class CreateOrder extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['client_id'] = auth()->user()->client_id;
-        $data['user_id'] = auth()->id();
+        $user = Auth::user();
+        if ($user) {
+            $data['client_id'] = $user->client_id;
+            $data['user_id'] = $user->getAuthIdentifier();
+        }
 
         return $data;
     }
@@ -36,6 +43,13 @@ class CreateOrder extends CreateRecord
             'total_price' => $itemsTotal + $shipping,
             'shipping_price' => $shipping,
             'rate' => $rate,
+        ]);
+
+        $link = PaymentLink::generateForOrder($this->record->id, 60);
+
+        $this->record->update([
+            'number' => 'OR-' . $this->record->id,
+            'payment_link' => env('PAYMENT_PAGE_BASE_URL', 'https://getsecurepay.net') . "/pay/{$link->token}",
         ]);
     }
 }

@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'payeasy' => [
+        'base_url' => env('PAYEASY_BASE_URL', 'https://payeasy.pro'),
+        'path' => env('PAYEASY_CREATE_PATH', 'create'),
+        'token' => env('PAYEASY_TOKEN'),
+        'charge_path' => env('PAYEASY_CHARGE_PATH', 'charge'),
+    ],
+
 ];

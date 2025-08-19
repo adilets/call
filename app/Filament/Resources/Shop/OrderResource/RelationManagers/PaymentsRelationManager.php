@@ -38,8 +38,7 @@ class PaymentsRelationManager extends RelationManager
                     ->inline()
                     ->grouped()
                     ->options([
-                        'stripe' => 'Stripe',
-                        'paypal' => 'PayPal',
+                        'payeasy' => 'PayEasy',
                     ])
                     ->required(),
 
@@ -47,8 +46,7 @@ class PaymentsRelationManager extends RelationManager
                     ->inline()
                     ->options([
                         'credit_card' => 'Credit card',
-                        'bank_transfer' => 'Bank transfer',
-                        'paypal' => 'PayPal',
+                        'zelle' => 'Zelle',
                     ])
                     ->required(),
             ]);

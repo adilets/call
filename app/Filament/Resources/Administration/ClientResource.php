@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Administration;
 
 use App\Filament\Resources\Administration;
 use App\Models\Client;
+use Illuminate\Support\Facades\Auth;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
@@ -35,6 +36,12 @@ class ClientResource extends Resource
 
                         TextInput::make('phone')
                             ->required()
+                            ->maxLength(255),
+
+                        TextInput::make('path')
+                            ->required()
+                            ->label('PayEasy Path')
+                            ->helperText('Custom path for PayEasy endpoints, provided by the provider')
                             ->maxLength(255),
                     ])
                     ->columns(2),

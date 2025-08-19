@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Client extends Model
 {
-    protected $fillable = ['name', 'company', 'phone'];
+    protected $fillable = ['name', 'company', 'phone', 'path'];
 
     public function users(): HasMany {
         return $this->hasMany(User::class);

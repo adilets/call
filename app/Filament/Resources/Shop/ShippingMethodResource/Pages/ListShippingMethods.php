@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\ShippingMethodResource\Pages;
+namespace App\Filament\Resources\Shop\ShippingMethodResource\Pages;
 
 use App\Filament\Resources\Shop\ShippingMethodResource;
 use Filament\Actions;

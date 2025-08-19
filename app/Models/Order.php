@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
@@ -30,6 +31,8 @@ class Order extends Model
         'status',
         'currency',
         'notes',
+        'payeasy_transaction_id',
+        'payment_link',
         'shipping_method_id',
         'client_id',
         'user_id',
@@ -44,6 +47,24 @@ class Order extends Model
     public function address(): MorphOne
     {
         return $this->morphOne(OrderAddress::class, 'addressable');
+    }
+
+    /** Billing address alias for backward compatibility */
+    public function billingAddress(): MorphOne
+    {
+        return $this->morphOne(OrderAddress::class, 'addressable')->where('type', 'billing');
+    }
+
+    /** Shipping address */
+    public function shippingAddress(): MorphOne
+    {
+        return $this->morphOne(OrderAddress::class, 'addressable')->where('type', 'shipping');
+    }
+
+    /** All addresses for the order */
+    public function addresses(): MorphMany
+    {
+        return $this->morphMany(OrderAddress::class, 'addressable');
     }
 
     /** @return BelongsTo<Customer,self> */

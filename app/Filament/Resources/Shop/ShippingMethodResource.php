@@ -2,8 +2,9 @@
 
 namespace App\Filament\Resources\Shop;
 
-use App\Filament\Resources\ShippingMethodResource\Pages;
-use App\Filament\Resources\ShippingMethodResource\RelationManagers;
+use App\Filament\Resources\Shop\ShippingMethodResource\Pages\CreateShippingMethod;
+use App\Filament\Resources\Shop\ShippingMethodResource\Pages\EditShippingMethod;
+use App\Filament\Resources\Shop\ShippingMethodResource\Pages\ListShippingMethods;
 use App\Models\ShippingMethod;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
@@ -103,9 +104,9 @@ class ShippingMethodResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListShippingMethods::route('/'),
-            'create' => Pages\CreateShippingMethod::route('/create'),
-            'edit' => Pages\EditShippingMethod::route('/{record}/edit'),
+            'index' => ListShippingMethods::route('/'),
+            'create' => CreateShippingMethod::route('/create'),
+            'edit' => EditShippingMethod::route('/{record}/edit'),
         ];
     }
 

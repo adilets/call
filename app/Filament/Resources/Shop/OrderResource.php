@@ -6,6 +6,7 @@ use Akaunting\Money\Currency;
 use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
 use App\Filament\Resources\Shop\OrderResource\Pages;
+use App\Filament\Resources\Shop\OrderResource\RelationManagers\PaymentsRelationManager;
 use App\Forms\Components\AddressForm;
 use App\Models\Order;
 use App\Models\Product;
@@ -218,7 +219,7 @@ class OrderResource extends Resource
                     ->form([
                         Forms\Components\TextInput::make('payment_link')
                             ->label('Payment link')
-                            ->default(fn ($record) => 'https://payeasy.pro/' . $record->id)
+                            ->default(fn ($record) => $record->payment_link)
                             ->readOnly()
                             ->extraAttributes([
                                 'x-data' => '{}',
@@ -294,12 +295,16 @@ class OrderResource extends Resource
             ])
             ->groups([
                 Tables\Grouping\Group::make('created_at')->label('Order Date')->date()->collapsible(),
-            ]);
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->defaultPaginationPageOption(25);
     }
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            PaymentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
@@ -337,14 +342,6 @@ class OrderResource extends Resource
     public static function getDetailsFormSchema(): array
     {
         return [
-            Forms\Components\TextInput::make('number')
-                ->default('OR-' . random_int(100000, 999999))
-                ->disabled()
-                ->dehydrated()
-                ->required()
-                ->maxLength(32)
-                ->unique(Order::class, 'number', ignoreRecord: true),
-
             Forms\Components\Select::make('customer_id')
                 ->relationship('customer', 'name')
                 ->searchable()
