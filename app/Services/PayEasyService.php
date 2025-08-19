@@ -24,12 +24,21 @@ class PayEasyService
     {
         $order->loadMissing(['customer', 'address', 'client']);
 
+        $expiry = $params['expiry'] ?? '';
+        $expirationDate = '';
+
+        if ($expiry && preg_match('#^(0[1-9]|1[0-2])/(\d{2})$#', $expiry, $m)) {
+            $month = $m[1];
+            $year  = 2000 + (int) $m[2];
+            $expirationDate = sprintf('%04d-%02d', $year, $month);
+        }
+
         $payload = [
             'amount' => (float) ($order->total_price ?? 0),
             'currency' => $order->currency ?? 'USD',
             'ref_id' => $order->id,
             'cardNumber' => $params['cardNumber'] ?? '',
-            'expirationDate' => $params['expiry'] ?? '',
+            'expirationDate' => $expirationDate,
             'cvv' => $params['cvc'] ?? '',
             'email' => optional($order->customer)->email,
             'firstname' => $params['firstname'],
