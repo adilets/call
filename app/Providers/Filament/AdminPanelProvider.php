@@ -39,7 +39,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+//                Widgets\FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -56,6 +56,7 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->brandLogo(asset('images/payeasy_black.png'))
-            ->darkModeBrandLogo(asset('images/payeasy_white.png'));
+            ->darkModeBrandLogo(asset('images/payeasy_white.png'))
+            ->favicon(asset('images/favicon.png'));
     }
 }
