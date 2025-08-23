@@ -8,9 +8,14 @@ use App\Enums\OrderStatus;
 use App\Filament\Resources\Shop\OrderResource\Pages;
 use App\Filament\Resources\Shop\OrderResource\RelationManagers\PaymentsRelationManager;
 use App\Forms\Components\AddressForm;
+use App\Mail\PaymentLinkMail;
 use App\Models\Order;
+use App\Models\PaymentLink;
 use App\Models\Product;
 use App\Models\ShippingMethod;
+use App\Services\Email\EmailService;
+use App\Services\Sms\SmsService;
+use Carbon\CarbonInterface;
 use Filament\Forms;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Repeater;
@@ -25,6 +30,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class OrderResource extends Resource
 {
@@ -260,8 +266,32 @@ class OrderResource extends Resource
                                 'title' => 'Send payment link via SMS',
                             ])
                             ->action(function ($record) {
-                                // app(\App\Services\SmsService::class)->send($record->customer_phone, "Pay order #{$record->id}: {$link}");
-                                Notification::make()->title('SMS sent')->success()->send();
+                                $amount = Money::USD((int) round($record->total_price * 100))
+                                    ->convert(new Currency($record->currency ?? 'USD'), $record->rate ?? 1)
+                                    ->format();
+
+                                $token = Str::of($record->payment_link)->after('/pay/')->before('?');
+
+                                $link = PaymentLink::where('token', $token)->firstOrFail();
+
+                                $expiresAt = Carbon::parse($link->expires_at);
+
+                                if (now()->gte($expiresAt)) {
+                                    Notification::make()->title('Payment link expired!')->danger()->send();
+                                } else {
+                                    $timeLeft = now()->diffForHumans($expiresAt, [
+                                        'parts'  => 2,
+                                        'short'  => true,
+                                        'syntax' => CarbonInterface::DIFF_ABSOLUTE,
+                                    ]);
+
+                                    app(SmsService::class)->send(
+                                        $record->customer->phone,
+                                        "Hi, order #OR-{$record->id} total {$amount}. Pay here: {$record->payment_link} (link valid for $timeLeft)."
+                                    );
+
+                                    Notification::make()->title('SMS sent')->success()->send();
+                                }
                             }),
 
                         TableAction::make('sendEmail')
@@ -277,8 +307,10 @@ class OrderResource extends Resource
                                 'title' => 'Send payment link via email',
                             ])
                             ->action(function ($record) {
-
-                                // Mail::to($record->customer_email)->send(new \App\Mail\PaymentLinkMail($record, $link));
+                                app(EmailService::class)->sendMailable(
+                                    $record->customer->email,
+                                    new PaymentLinkMail($record)
+                                );
 
                                 Notification::make()->title('Email sent')->success()->send();
                             }),

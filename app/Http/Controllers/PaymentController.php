@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Akaunting\Money\Currency;
+use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
+use App\Mail\PaymentConfirmationMail;
+use App\Mail\PaymentLinkMail;
 use App\Models\Order;
 use App\Models\PaymentLink;
 use App\Models\CurrencyRate;
+use App\Services\Email\EmailService;
 use App\Services\PayEasyService;
+use App\Services\Sms\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -212,12 +218,11 @@ class PaymentController extends Controller
                 'frame_uuid' => $validated['frame_uuid']
             ]);
 
-
-
             $reference = $paymentResponse['id'] ?? null;
             $success   = (bool) ($paymentResponse['success'] ?? false);
             $status    = $paymentResponse['status'] ?? null;
             $message   = $paymentResponse['message'] ?? null;
+            $descriptor = $paymentResponse['descriptor'] ?? null;
 
             if ($reference && $success) {
                 $already = $order->payments()->where('reference', $reference)->exists();
@@ -232,12 +237,27 @@ class PaymentController extends Controller
                     ]);
                 }
 
+                app(EmailService::class)->sendMailable(
+                    $order->customer->email,
+                    new PaymentConfirmationMail($order, $descriptor)
+                );
+
+                $amount = Money::USD((int) round($order->total_price * 100))
+                    ->convert(new Currency($order->currency ?? 'USD'), $order->rate ?? 1)
+                    ->format();
+
+                $message = "Hi, we’ve received your payment for order #OR-{$order->id} ($amount). Thank you! On your bank statement the charge will appear as $descriptor.";
+
+                app(SmsService::class)->send(
+                    $order->customer->phone,
+                    $message
+                );
+
                 $order->status = OrderStatus::Paid;
                 $order->save();
             } else {
                 Log::warning('PayEasy failed', compact('reference','status','message'));
             }
-
 
             return response()->json($paymentResponse);
 
