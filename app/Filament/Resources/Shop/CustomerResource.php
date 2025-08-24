@@ -48,6 +48,12 @@ class CustomerResource extends Resource
 
                         Forms\Components\DatePicker::make('birthday')
                             ->maxDate('today'),
+
+                        Forms\Components\Select::make('gender')
+                            ->placeholder('Select gender')
+                            ->options(['male' => 'Male','female' => 'Female'])
+                            ->required()
+                            ->native(false),
                     ])
                     ->columns(2)
                     ->columnSpan(['lg' => fn (?Customer $record) => $record === null ? 3 : 2]),
