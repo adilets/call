@@ -23,6 +23,7 @@ class Product extends Model implements HasMedia
 
     protected $fillable = [
         'client_id',
+        'user_id',
         'name',
         'slug',
         'sku',

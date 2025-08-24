@@ -15,6 +15,10 @@ class CreateShippingMethod extends CreateRecord
     {
         $this->countryCodes = $data['country_codes'] ?? [];
         unset($data['country_codes']);
+
+        $data['client_id'] = auth()->user()->client_id;
+        $data['user_id'] = auth()->id();
+
         return $data;
     }
 

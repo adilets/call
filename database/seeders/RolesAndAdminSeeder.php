@@ -18,7 +18,14 @@ class RolesAndAdminSeeder extends Seeder
     {
         // Создание ролей
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
-        $clientRole = Role::firstOrCreate(['name' => 'client']);
+        // rename 'client' to 'manager' if exists
+        $clientRole = Role::where('name', 'client')->first();
+        if ($clientRole) {
+            $clientRole->name = 'manager';
+            $clientRole->save();
+        }
+        $managerRole = Role::firstOrCreate(['name' => 'manager']);
+        $operatorRole = Role::firstOrCreate(['name' => 'operator']);
 
         // Создание клиента
         $client = Client::firstOrCreate(

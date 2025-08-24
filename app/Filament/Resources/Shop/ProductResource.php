@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop;
 
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use App\Filament\Imports\ProductImporter;
 use App\Filament\Resources\Shop;
 use App\Models\Product;
@@ -34,9 +35,13 @@ use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class ProductResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = Product::class;
     protected static ?string $navigationLabel = 'Products';
     protected static ?string $navigationIcon = 'heroicon-o-cube';
@@ -47,7 +52,7 @@ class ProductResource extends Resource
         return $form
             ->schema([
                 Hidden::make('client_id')
-                    ->default(fn () => auth()->user()->client_id),
+                    ->default(fn () => \Illuminate\Support\Facades\Auth::user()?->client_id),
                 Group::make()
                     ->schema([
                         Section::make()
@@ -281,6 +286,11 @@ class ProductResource extends Resource
             ]);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return self::applyRoleScope(parent::getEloquentQuery());
+    }
+
     public static function getPages(): array
     {
         return [
@@ -290,16 +300,10 @@ class ProductResource extends Resource
         ];
     }
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
-    {
-        return parent::getEloquentQuery()
-            ->where('client_id', auth()->user()->client_id);
-    }
-
     public static function canAccess(): bool
     {
         // Если у тебя только клиентские пользователи:
-        return auth()->check();
+        return Auth::check();
 
         // Или если только для клиентов с ролью:
         // return auth()->user()?->hasRole('client');

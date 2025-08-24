@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop;
 
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use App\Filament\Resources\Shop\ShippingMethodResource\Pages\CreateShippingMethod;
 use App\Filament\Resources\Shop\ShippingMethodResource\Pages\EditShippingMethod;
 use App\Filament\Resources\Shop\ShippingMethodResource\Pages\ListShippingMethods;
@@ -21,10 +22,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use PragmaRX\Countries\Package\Countries;
 
 class ShippingMethodResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = ShippingMethod::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-truck';
@@ -34,7 +38,7 @@ class ShippingMethodResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Hidden::make('client_id')->default(fn () => auth()->user()->client_id),
+            Hidden::make('client_id')->default(fn () => Auth::user()?->client_id),
 
             TextInput::make('name')->required(),
 
@@ -112,8 +116,7 @@ class ShippingMethodResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('client_id', auth()->user()->client_id);
+        return self::applyRoleScope(parent::getEloquentQuery());
     }
 
     public static function getCountriesList(): array

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop;
 
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use App\Filament\Resources\Shop\CustomerResource\Pages;
 use App\Filament\Resources\Shop\CustomerResource\RelationManagers;
 use App\Models\Customer;
@@ -17,6 +18,8 @@ use PragmaRX\Countries\Package\Countries;
 
 class CustomerResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = Customer::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
@@ -120,10 +123,11 @@ class CustomerResource extends Resource
             ]);
     }
 
-    /** @return Builder<Customer> */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('addresses')->withoutGlobalScope(SoftDeletingScope::class);
+        $query = parent::getEloquentQuery()->with('addresses')->withoutGlobalScope(SoftDeletingScope::class);
+
+        return self::applyRoleScope($query);
     }
 
     public static function getRelations(): array

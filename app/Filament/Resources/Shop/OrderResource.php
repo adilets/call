@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop;
 
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use Akaunting\Money\Currency;
 use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
@@ -29,11 +30,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class OrderResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = Order::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
@@ -350,7 +354,9 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->withoutGlobalScope(SoftDeletingScope::class);
+        $query = parent::getEloquentQuery()->withoutGlobalScope(SoftDeletingScope::class);
+
+        return self::applyRoleScope($query);
     }
 
     public static function getGloballySearchableAttributes(): array
@@ -367,8 +373,9 @@ class OrderResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $modelClass = static::$model;
-        return (string) $modelClass::where('status', 'new')->count();
+        $query = self::applyRoleScope(Order::query());
+
+        return (string) $query->where('status', 'new')->count();
     }
 
     public static function getDetailsFormSchema(): array
@@ -389,7 +396,7 @@ class OrderResource extends Resource
             Forms\Components\Select::make('shipping_method_id')
                 ->label('Shipping method')
                 ->required()
-                ->options(fn () => ShippingMethod::query()->where('client_id', auth()->user()->client_id)->where('enabled', true)->orderBy('name')->pluck('name', 'id'))
+                ->options(fn () => ShippingMethod::query()->where('client_id', optional(Auth::user())->client_id)->where('enabled', true)->orderBy('name')->pluck('name', 'id'))
                 ->searchable()
                 ->preload()
                 ->afterStateUpdated(function ($state, callable $set) {

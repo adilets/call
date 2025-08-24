@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop;
 
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use App\Filament\Resources\CategoryResource\Pages;
 use App\Filament\Resources\CategoryResource\RelationManagers;
 use App\Filament\Resources\Shop;
@@ -24,6 +25,8 @@ use Illuminate\Support\Str;
 
 class CategoryResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = Category::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
@@ -133,5 +136,10 @@ class CategoryResource extends Resource
             'create' => Shop\CategoryResource\Pages\CreateCategory::route('/create'),
             'edit' => Shop\CategoryResource\Pages\EditCategory::route('/{record}/edit'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return self::applyRoleScope(parent::getEloquentQuery());
     }
 }

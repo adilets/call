@@ -17,6 +17,7 @@ use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Auth;
 
 class UserResource extends Resource
 {
@@ -81,6 +82,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('name')->searchable(),
                 Tables\Columns\TextColumn::make('email')->searchable(),
+                Tables\Columns\TextColumn::make('roles')->label('Roles')->getStateUsing(fn ($record) => $record->getRoleNames()->implode(', '))->sortable()->searchable(),
                 Tables\Columns\TextColumn::make('client.company')->label('Client'),
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable(),
             ])

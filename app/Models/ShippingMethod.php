@@ -23,6 +23,7 @@ class ShippingMethod extends Model
         'cost',
         'enabled',
         'description',
+        'user_id'
     ];
 
     protected $casts = [

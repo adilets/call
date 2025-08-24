@@ -28,6 +28,8 @@ class Category extends Model implements HasMedia
     ];
 
     protected $fillable = [
+        'client_id',
+        'user_id',
         'parent_id',
         'name',
         'slug',
