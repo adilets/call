@@ -11,9 +11,11 @@ use App\Filament\Resources\Shop\OrderResource\RelationManagers\PaymentsRelationM
 use App\Forms\Components\AddressForm;
 use App\Mail\PaymentLinkMail;
 use App\Models\Order;
+use App\Models\Customer;
 use App\Models\PaymentLink;
 use App\Models\Product;
 use App\Models\ShippingMethod;
+use App\Models\User;
 use App\Services\Email\EmailService;
 use App\Services\Sms\SmsService;
 use Carbon\CarbonInterface;
@@ -382,7 +384,38 @@ class OrderResource extends Resource
     {
         return [
             Forms\Components\Select::make('customer_id')
-                ->relationship('customer', 'name')
+                ->label('Customer')
+                ->relationship('customer', 'name', function (Builder $query) {
+                    $user = Auth::user();
+
+                    if (!$user) {
+                        $query->whereRaw('1=0');
+                        return;
+                    }
+
+                    if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('admin')) {
+                        // no scope
+                        return;
+                    }
+
+                    if ($user instanceof User && method_exists($user, 'hasRole') && ($user->hasRole('manager') || $user->hasRole('client'))) {
+                        $query->where('client_id', $user->client_id);
+                        return;
+                    }
+
+                    if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('operator')) {
+                        $query->where('client_id', $user->client_id)->where('user_id', $user->id);
+                        return;
+                    }
+
+                    $query->where('client_id', $user->client_id);
+                })
+                ->getOptionLabelFromRecordUsing(function (Customer $record) {
+                    $name = $record->name ?: ('Customer #'.$record->id);
+                    $email = $record->email ? ' (' . $record->email . ')' : '';
+                    return $name.$email;
+                })
+                ->preload()
                 ->searchable()
                 ->required()
                 ->createOptionForm([
@@ -408,18 +441,14 @@ class OrderResource extends Resource
 
             Forms\Components\Select::make('currency')
                 ->label('Currency')
+                ->options([
+                    'USD' => 'US Dollar',
+                    'EUR' => 'Euro',
+                    'GBP' => 'British Pound',
+                    'AUD' => 'Australian Dollar',
+                ])
+                ->default('USD')
                 ->searchable()
-                ->options(
-                    collect(config('money.currencies'))
-                        ->mapWithKeys(fn ($config, $code) => [$code => $config['name']])
-                        ->toArray()
-                )
-                ->getSearchResultsUsing(function (string $query) {
-                    return collect(config('money.currencies'))
-                        ->filter(fn ($config) => str_contains(strtolower($config['name']), strtolower($query)))
-                        ->mapWithKeys(fn ($config, $code) => [$code => $config['name']]);
-                })
-                ->getOptionLabelUsing(fn ($value) => currency($value)?->getName() ?? $value)
                 ->required(),
 
             Forms\Components\ToggleButtons::make('status')
@@ -440,7 +469,20 @@ class OrderResource extends Resource
             ->schema([
                 Forms\Components\Select::make('product_id')
                     ->label('Product')
-                    ->options(Product::query()->pluck('name', 'id'))
+                    ->options(function () {
+                        $u = Auth::user();
+
+                        return Product::query()
+                            ->when($u instanceof User && method_exists($u, 'hasRole') && $u->hasRole('admin'), fn ($q) => $q)
+                            ->when($u instanceof User && method_exists($u, 'hasRole') && $u->hasRole('manager'), fn ($q) => $q->where('client_id', $u->client_id))
+                            ->when($u instanceof User && method_exists($u, 'hasRole') && $u->hasRole('operator'), fn ($q) =>
+                            $q->where('client_id', $u->client_id)
+                                ->where('user_id', $u->id)
+                            )
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->toArray();
+                    })
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(fn ($state, Forms\Set $set) => $set('unit_price', Product::find($state)?->price ?? 0))

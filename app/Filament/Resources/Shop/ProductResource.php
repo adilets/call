@@ -37,6 +37,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 
 class ProductResource extends Resource
 {
@@ -52,7 +54,7 @@ class ProductResource extends Resource
         return $form
             ->schema([
                 Hidden::make('client_id')
-                    ->default(fn () => \Illuminate\Support\Facades\Auth::user()?->client_id),
+                    ->default(fn () => Auth::user()?->client_id),
                 Group::make()
                     ->schema([
                         Section::make()
@@ -177,8 +179,32 @@ class ProductResource extends Resource
 //                                    ->hiddenOn(ProductsRelationManager::class),
 
                                 Select::make('categories')
-                                    ->relationship('categories', 'name')
+                                    ->relationship('categories', 'name', function (EloquentBuilder $query) {
+                                        $user = Auth::user();
+                                        if (!$user) {
+                                            $query->whereRaw('1=0');
+                                            return;
+                                        }
+
+                                        if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('admin')) {
+                                            return; // no scope
+                                        }
+
+                                        if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('manager')) {
+                                            $query->where('client_id', $user->client_id);
+                                            return;
+                                        }
+
+                                        if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('operator')) {
+                                            $query->where('client_id', $user->client_id)->where('user_id', $user->id);
+                                            return;
+                                        }
+
+                                        $query->where('client_id', $user->client_id);
+                                    })
                                     ->multiple()
+                                    ->preload()
+                                    ->searchable()
                                     ->required(),
                             ]),
                     ])
@@ -314,11 +340,11 @@ class ProductResource extends Resource
         return ['name', 'sku'];
     }
 
-    public static function getNavigationBadge(): ?string
-    {
-        /** @var class-string<Model> $modelClass */
-        $modelClass = static::$model;
-
-        return (string) $modelClass::whereColumn('qty', '<', 'security_stock')->count();
-    }
+//    public static function getNavigationBadge(): ?string
+//    {
+//        /** @var class-string<Model> $modelClass */
+//        $modelClass = static::$model;
+//
+//        return (string) $modelClass::whereColumn('qty', '<', 'security_stock')->count();
+//    }
 }
