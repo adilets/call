@@ -225,6 +225,7 @@ class OrderResource extends Resource
                 TableAction::make('paymentInfo')
                     ->label('Payment')
                     ->icon('heroicon-o-currency-dollar')
+                    ->visible(fn ($record) => (string) ($record->status ?? '') === 'new')
                     ->modalHeading('Send payment link')
                     ->modalSubmitAction(false)
                     ->modalWidth('lg')
