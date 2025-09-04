@@ -20,7 +20,6 @@ class CreateUser extends CreateRecord
 
     protected function afterCreate(): void
     {
-        dd('afterCreate');
         if ($this->selectedRole) {
             $this->record->syncRoles([$this->selectedRole]);
             app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
