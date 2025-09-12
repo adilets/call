@@ -272,10 +272,13 @@ class PaymentController extends Controller
                     ]);
                 }
 
-                app(EmailService::class)->sendMailable(
-                    $order->customer->email,
-                    new PaymentConfirmationMail($order, $descriptor)
-                );
+                if (!empty(optional($order->customer)->email)) {
+                    app(EmailService::class)->sendMailable(
+                        $order->customer->email,
+                        new PaymentConfirmationMail($order, $descriptor)
+                    );
+                }
+
 
                 $amount = Money::USD((int) round($order->total_price * 100))
                     ->convert(new Currency($order->currency ?? 'USD'), $order->rate ?? 1)
