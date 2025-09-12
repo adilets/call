@@ -79,7 +79,6 @@ class AddressForm extends Forms\Components\Field
                         ->label('State')
                         ->options(config('geo.us_states'))
                         ->searchable()
-                        ->required()
                         ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
                             $result = self::validateUspsOnce($get);
                             if ($result !== true) {
