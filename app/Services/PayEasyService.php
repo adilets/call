@@ -70,8 +70,6 @@ class PayEasyService
 
         $response = Http::withHeaders($headers)->post($endpoint, $payload);
 
-        dd($response->body());
-
 //        if (!$response->successful()) {
 //            Log::warning('PayEasy chargeCard failed', [
 //                'status' => $response->status(),
