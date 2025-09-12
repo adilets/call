@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shop\OrderResource\Pages;
 
+use App\Enums\OrderStatus;
 use App\Filament\Resources\Shop\OrderResource;
 use App\Models\CurrencyRate;
 use App\Models\PaymentLink;
@@ -18,10 +19,13 @@ class CreateOrder extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $user = Auth::user();
+
         if ($user) {
             $data['client_id'] = $user->client_id;
             $data['user_id'] = $user->getAuthIdentifier();
         }
+
+        $data['status'] = OrderStatus::New;
 
         return $data;
     }

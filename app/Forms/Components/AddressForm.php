@@ -3,13 +3,16 @@
 namespace App\Forms\Components;
 
 use Filament\Forms;
+use Filament\Forms\Get;
 use Illuminate\Database\Eloquent\Model;
-use PragmaRX\Countries\Package\Countries;
-use Squire\Models\Country;
+use Illuminate\Support\Facades\App;
+use Closure;
 
 class AddressForm extends Forms\Components\Field
 {
     protected string $view = 'filament-forms::components.group';
+
+    protected static array $uspsValidationCache = [];
 
     /** @var string|callable|null */
     public $relationship = null;
@@ -44,58 +47,87 @@ class AddressForm extends Forms\Components\Field
             Forms\Components\Grid::make()
                 ->schema([
                     Forms\Components\Select::make('country')
-                        ->searchable()
-                        ->options(function () {
-                            $countries = new Countries();
-
-                            return $countries->all()
-                                ->mapWithKeys(fn ($c) => [$c->cca2 => $c->name->common])
-                                ->sort()
-                                ->toArray();
-                        })
-                        ->getSearchResultsUsing(function (string $query) {
-                            $countries = new Countries();
-
-                            $q = mb_strtolower($query);
-
-                            return $countries->all()
-                                ->filter(fn ($c) => str_contains(mb_strtolower($c->name->common), $q))
-                                ->mapWithKeys(fn ($c) => [$c->cca2 => $c->name->common])
-                                ->toArray();
-                        })
-                        ->getOptionLabelUsing(function ($value): ?string {
-                            if (!$value) return null;
-
-                            $countries = new Countries();
-
-                            $value = strtoupper($value);
-
-                            $country =
-                                $countries->where('cca2', $value)->first()
-                                ?? $countries->where('cca3', $value)->first()
-                                ?? (ctype_digit($value) ? $countries->where('ccn3', $value)->first() : null)
-                                ?? $countries->where('name.common', $value)->first();
-
-                            return $country?->name->common;
-                        }),
+                        ->label('Country')
+                        ->options([
+                            'US' => 'United States',
+                        ])
+                        ->default('US')
+                        ->required(),
                 ]),
 
             Forms\Components\TextInput::make('street')
                 ->label('Street address')
-                ->maxLength(255),
+                ->maxLength(255)
+                ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
+                    $result = self::validateUspsOnce($get);
+                    if ($result !== true) {
+                        $fail($result);
+                    }
+                }]),
 
             Forms\Components\Grid::make(3)
                 ->schema([
                     Forms\Components\TextInput::make('city')
-                        ->maxLength(255),
-                    Forms\Components\TextInput::make('state')
-                        ->label('State / Province')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
+                            $result = self::validateUspsOnce($get);
+                            if ($result !== true) {
+                                $fail($result);
+                            }
+                        }]),
+                    Forms\Components\Select::make('state')
+                        ->label('State')
+                        ->options(config('geo.us_states'))
+                        ->searchable()
+                        ->required()
+                        ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
+                            $result = self::validateUspsOnce($get);
+                            if ($result !== true) {
+                                $fail($result);
+                            }
+                        }]),
                     Forms\Components\TextInput::make('zip')
                         ->label('Zip / Postal code')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
+                            $result = self::validateUspsOnce($get);
+                            if ($result !== true) {
+                                $fail($result);
+                            }
+                        }]),
                 ]),
         ];
+    }
+
+    protected static function validateUspsOnce(Get $get): string|bool
+    {
+        $country = $get('country') ?? 'US';
+        if ($country !== 'US') {
+            return true;
+        }
+
+        $street = (string) ($get('street') ?? '');
+        $city   = (string) ($get('city') ?? '');
+        $state  = (string) ($get('state') ?? '');
+        $zip    = (string) ($get('zip') ?? '');
+
+        $key = sha1("$street|$city|$state|$zip");
+        if (array_key_exists($key, self::$uspsValidationCache)) {
+            return self::$uspsValidationCache[$key];
+        }
+
+        /** @var \App\Services\Address\UspsAddressService $svc */
+        $svc = App::make(\App\Services\Address\UspsAddressService::class);
+        [$ok, $msg, $normalized] = $svc->validateUsAddress(compact('street','city','state','zip'));
+
+        if ($ok) {
+            self::$uspsValidationCache[$key] = true;
+            return true;
+        }
+
+        $message = $msg ?: 'Invalid address.';
+        self::$uspsValidationCache[$key] = $message;
+        return $message;
     }
 
     protected function setUp(): void
@@ -106,7 +138,7 @@ class AddressForm extends Forms\Components\Field
             $address = $record?->getRelationValue($this->getRelationship());
 
             $component->state($address ? $address->toArray() : [
-                'country' => null,
+                'country' => 'US',
                 'street' => null,
                 'city' => null,
                 'state' => null,

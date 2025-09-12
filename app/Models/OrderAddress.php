@@ -13,6 +13,8 @@ class OrderAddress extends Model
     protected $table = 'order_addresses';
 
     protected $fillable = [
+        'first_name',
+        'last_name',
         'country',
         'street',
         'city',

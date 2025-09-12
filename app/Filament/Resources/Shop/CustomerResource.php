@@ -32,18 +32,23 @@ class CustomerResource extends Resource
             ->schema([
                 Forms\Components\Section::make()
                     ->schema([
-                        Forms\Components\TextInput::make('name')
+                        Forms\Components\TextInput::make('first_name')
+                            ->label('First name')
                             ->maxLength(255)
                             ->required(),
 
+                        Forms\Components\TextInput::make('last_name')
+                            ->label('Last name')
+                            ->maxLength(255),
+
                         Forms\Components\TextInput::make('email')
                             ->label('Email address')
-                            ->required()
                             ->email()
                             ->maxLength(255)
                             ->unique(ignoreRecord: true),
 
                         Forms\Components\TextInput::make('phone')
+                            ->required()
                             ->maxLength(255),
 
                         Forms\Components\DatePicker::make('birthday')
@@ -52,7 +57,6 @@ class CustomerResource extends Resource
                         Forms\Components\Select::make('gender')
                             ->placeholder('Select gender')
                             ->options(['male' => 'Male','female' => 'Female'])
-                            ->required()
                             ->native(false),
                     ])
                     ->columns(2)
@@ -78,7 +82,13 @@ class CustomerResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                Tables\Columns\TextColumn::make('first_name')
+                    ->label('First name')
+                    ->searchable(isIndividual: true)
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('last_name')
+                    ->label('Last name')
                     ->searchable(isIndividual: true)
                     ->sortable(),
 

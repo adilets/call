@@ -18,7 +18,7 @@
 <div class="container">
     <div class="header">Payment Confirmation for Order #{{ $orderNumber }}</div>
 
-    <p>Dear {{ $customerName ?? 'Customer' }},</p>
+    <p>Dear {{ trim(($customerFirstName ?? '') . ' ' . ($customerLastName ?? '')) ?: ($customerName ?? 'Customer') }},</p>
 
     <p>We have successfully received your payment. Thank you for your trust!</p>
 

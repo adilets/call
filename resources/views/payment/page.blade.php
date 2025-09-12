@@ -43,7 +43,7 @@
                     /** @var \App\Models\Order|null $order */
                     $items = isset($order) ? ($order->items ?? collect()) : collect();
                     $subtotal = $items->sum(fn ($i) => (float) ($i->qty ?? 0) * (float) ($i->unit_price ?? 0));
-                    $shippingMethods = isset($shippingMethods) ? $shippingMethods : \App\Models\ShippingMethod::query()->get();
+                    $shippingMethods = collect($shippingMethods ?? []);
                     $selectedShippingId = isset($order) ? ($order->shipping_method_id ?? null) : null;
                     $selectedShipping = $shippingMethods->firstWhere('id', $selectedShippingId) ?? $shippingMethods->first();
                     $shippingCost = (float) ($selectedShipping->cost ?? 0); // in USD
@@ -142,6 +142,8 @@
                     $customerAddress = isset($order) ? optional(optional($order->customer)->addresses)->first() : null;
                     $billing = $orderAddress ?: $customerAddress;
                     $billingName = isset($order) ? optional($order->customer)->name : null;
+                    $billingFirstName = isset($order) ? optional($order->customer)->first_name : null;
+                    $billingLastName = isset($order) ? optional($order->customer)->last_name : null;
                     $billingEmail = isset($order) ? optional($order->customer)->email : null;
                     $billingPhone = isset($order) ? optional($order->customer)->phone : null;
                     @endphp
@@ -149,17 +151,28 @@
                         <h5 class="card-title">Billing Information</h5>
                         <input type="email" class="form-control mb-3" placeholder="Email" id="email" value="{{ $billingEmail }}">
                         <h6 class="mt-3">Billing Address</h6>
-                        <input type="text" class="form-control mb-3" placeholder="Full name" id="fullName" value="{{ $billingName }}">
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="text" class="form-control mb-3" placeholder="First name" id="firstName" value="{{ $billingFirstName }}">
+                            </div>
+                            <div class="col-6">
+                                <input type="text" class="form-control mb-3" placeholder="Last name" id="lastName" value="{{ $billingLastName }}">
+                            </div>
+                        </div>
                         <select class="form-select mb-3" id="country">
-                            <option value="">Select country</option>
-                            @foreach(($countries ?? []) as $code => $name)
-                                <option value="{{ $code }}" {{ strtoupper($billing?->country) === $code ? 'selected' : '' }}>{{ $name }}</option>
-                            @endforeach
+                            <option value="US" selected>United States</option>
                         </select>
                         <input type="text" class="form-control mb-3" placeholder="Address" id="address" value="{{ $billing?->street }}">
                         <div class="row">
                             <div class="col-6"><input type="text" class="form-control mb-3" placeholder="City" id="city" value="{{ $billing?->city }}"></div>
-                            <div class="col-3"><input type="text" class="form-control mb-3" placeholder="State" id="state" value="{{ $billing?->state }}"></div>
+                            <div class="col-3">
+                                <select class="form-select mb-3" id="state">
+                                    <option value="">Select state</option>
+                                    @foreach(($states ?? []) as $code => $name)
+                                        <option value="{{ $code }}" {{ strtoupper($billing?->state) === $code ? 'selected' : '' }}>{{ $name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="col-3"><input type="text" class="form-control mb-3" placeholder="ZIP" id="zip" value="{{ $billing?->zip }}"></div>
                         </div>
                         <input type="tel" class="form-control mb-3" placeholder="Phone number (e.g., 070-123 45 67)" id="phone" value="{{ $billingPhone }}">
@@ -169,17 +182,28 @@
                         </div>
                         <div class="shipping-details mt-3" style="display: none;">
                             <h6>Shipping Details</h6>
-                            <input type="text" class="form-control mb-3" placeholder="Full name" id="shippingFullName">
+                            <div class="row">
+                                <div class="col-6">
+                                    <input type="text" class="form-control mb-3" placeholder="First name" id="shippingFirstName">
+                                </div>
+                                <div class="col-6">
+                                    <input type="text" class="form-control mb-3" placeholder="Last name" id="shippingLastName">
+                                </div>
+                            </div>
                             <select class="form-select mb-3" id="shippingCountry">
-                                <option value="">Select country</option>
-                                @foreach(($countries ?? []) as $code => $name)
-                                    <option value="{{ $code }}">{{ $name }}</option>
-                                @endforeach
+                                <option value="US" selected>United States</option>
                             </select>
                             <input type="text" class="form-control mb-3" placeholder="Address" id="shippingAddress">
                             <div class="row">
                                 <div class="col-6"><input type="text" class="form-control mb-3" placeholder="City" id="shippingCity"></div>
-                                <div class="col-3"><input type="text" class="form-control mb-3" placeholder="State" id="shippingState"></div>
+                                <div class="col-3">
+                                    <select class="form-select mb-3" id="shippingState">
+                                        <option value="">Select state</option>
+                                        @foreach(($states ?? []) as $code => $name)
+                                            <option value="{{ $code }}">{{ $name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                                 <div class="col-3"><input type="text" class="form-control mb-3" placeholder="ZIP" id="shippingZip"></div>
                             </div>
                             <input type="tel" class="form-control mb-3" placeholder="Phone number (e.g., 070-123 45 67)" id="shippingPhone">
@@ -352,14 +376,16 @@
         payBtn.addEventListener('click', function () {
             const formData = {
                 email: document.getElementById('email').value,
-                billingFullName: document.getElementById('fullName').value,
+                billingFirstname: document.getElementById('firstName').value,
+                billingLastname: document.getElementById('lastName').value,
                 billingCountry: document.getElementById('country').value,
                 billingAddress: document.getElementById('address').value,
                 billingCity: document.getElementById('city').value,
                 billingState: document.getElementById('state').value,
                 billingZip: document.getElementById('zip').value,
                 billingPhone: document.getElementById('phone').value,
-                shippingFullName: document.getElementById('shippingFullName')?.value,
+                shippingFirstname: document.getElementById('shippingFirstName')?.value,
+                shippingLastname: document.getElementById('shippingLastName')?.value,
                 shippingCountry: document.getElementById('shippingCountry')?.value,
                 shippingAddress: document.getElementById('shippingAddress')?.value,
                 shippingCity: document.getElementById('shippingCity')?.value,
@@ -375,9 +401,17 @@
             };
 
             // Валидация (пример)
-            if (!formData.email || !formData.billingFullName || !formData.billingAddress || !formData.billingPhone) {
+            const shippingSame = document.getElementById('shippingSame').checked;
+            if (!formData.billingAddress || !formData.billingPhone || !formData.billingFirstname) {
                 showAlert('danger', 'Please fill in all required billing fields.');
                 return;
+            }
+
+            if (!shippingSame) {
+                if (!formData.shippingFirstname || !formData.shippingAddress || !formData.shippingPhone) {
+                    showAlert('danger', 'Please fill in all required shipping fields.');
+                    return;
+                }
             }
 
             if (!formData.cardNumber || !formData.expiry || !formData.cvc) {
@@ -415,7 +449,7 @@
 
                     window.location.replace(url);
                 })
-                .catch(error => {
+                .catch(_ => {
                     showAlert('warning', 'An error occurred during payment processing.');
                 })
                 .finally(() => {

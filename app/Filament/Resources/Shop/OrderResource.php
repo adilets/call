@@ -16,6 +16,7 @@ use App\Models\PaymentLink;
 use App\Models\Product;
 use App\Models\ShippingMethod;
 use App\Models\User;
+use App\Services\Address\UspsAddressService;
 use App\Services\Email\EmailService;
 use App\Services\Sms\SmsService;
 use Carbon\CarbonInterface;
@@ -159,6 +160,108 @@ class OrderResource extends Resource
                         Forms\Components\Placeholder::make('updated_at')
                             ->label('Last modified at')
                             ->content(fn (Order $record): ?string => $record->updated_at?->diffForHumans()),
+
+                        Forms\Components\Hidden::make('order_id')
+                            ->default(fn (?Order $record) => $record?->id)
+                            ->dehydrated(false),
+
+                        Forms\Components\TextInput::make('payment_link')
+                            ->label('Payment link')
+                            ->default(fn (?Order $record) => $record?->payment_link)
+                            ->readOnly()
+                            ->extraAttributes(['x-data' => '{}'])
+                            ->extraInputAttributes(['x-ref' => 'paylink'])
+                            ->suffixAction(
+                                Forms\Components\Actions\Action::make('copy')
+                                    ->icon('heroicon-o-clipboard')
+                                    ->action(fn () => Notification::make()->title('Link copied')->success()->send())
+                                    ->extraAttributes([
+                                        'x-data' => '{}',
+                                        'x-on:click' => new HtmlString("navigator.clipboard.writeText(\$refs.paylink ? \$refs.paylink.value : '')"),
+                                    ])
+                            )
+                            ->hidden(fn (?Order $record) => $record?->status !== OrderStatus::New),
+
+                        Forms\Components\Actions::make([
+                            Action::make('sendSms')
+                                ->label('Send SMS')
+                                ->icon('heroicon-o-chat-bubble-left-right')
+                                ->color('warning')
+                                ->action(function (Forms\Get $get, ?Order $record) {
+                                    $paymentLink = (string) ($record?->payment_link ?? $get('payment_link') ?? '');
+                                    if ($paymentLink === '') {
+                                        Notification::make()->title('No payment link')->danger()->send();
+                                        return;
+                                    }
+
+                                    $token = (string) Str::of($paymentLink)->after('/pay/')->before('?');
+                                    $link = PaymentLink::where('token', $token)->first();
+                                    if (!$link) {
+                                        Notification::make()->title('Payment link not found')->danger()->send();
+                                        return;
+                                    }
+
+                                    $expiresAt = Carbon::parse($link->expires_at);
+                                    if (now()->gte($expiresAt)) {
+                                        Notification::make()->title('Payment link expired!')->danger()->send();
+                                        return;
+                                    }
+
+                                    $timeLeft = now()->diffForHumans($expiresAt, [
+                                        'parts'  => 2,
+                                        'short'  => true,
+                                        'syntax' => CarbonInterface::DIFF_ABSOLUTE,
+                                    ]);
+
+                                    $currency = (string) ($record?->currency ?? $get('currency') ?? 'USD');
+                                    $rate = (float) ($record?->rate ?? $get('rate') ?? 1);
+                                    $totalUsd = (float) ($record?->total_price ?? $get('total_price') ?? 0);
+                                    $amount = Money::USD((int) round($totalUsd * 100))
+                                        ->convert(new Currency($currency), $rate)
+                                        ->format();
+
+                                    $customer = $record?->customer ?? Customer::find((int) ($get('customer_id') ?? 0));
+                                    if (!$customer || empty($customer->phone)) {
+                                        Notification::make()->title('Customer phone not set')->danger()->send();
+                                        return;
+                                    }
+
+                                    $orderId = (int) ($record?->id ?? $get('order_id') ?? 0);
+                                    app(SmsService::class)->send(
+                                        $customer->phone,
+                                        "Hi, order #OR-{$orderId} total {$amount}. Pay here: {$paymentLink} (link valid for $timeLeft)."
+                                    );
+
+                                    Notification::make()->title('SMS sent')->success()->send();
+                                }),
+
+                            Action::make('sendEmail')
+                                ->label('Send Email')
+                                ->icon('heroicon-o-envelope')
+                                ->color('success')
+                                ->visible(fn (?Order $record) => filled(optional($record?->customer)->email))
+                                ->action(function (Forms\Get $get, ?Order $record) {
+                                    $orderId = (int) ($record?->id ?? $get('order_id') ?? 0);
+                                    if ($orderId === 0) {
+                                        Notification::make()->title('Order not found')->danger()->send();
+                                        return;
+                                    }
+
+                                    $order = $record ?? Order::find($orderId);
+                                    if (!$order || empty(optional($order->customer)->email)) {
+                                        Notification::make()->title('Customer email not set')->danger()->send();
+                                        return;
+                                    }
+
+                                    app(EmailService::class)->sendMailable(
+                                        $order->customer->email,
+                                        new PaymentLinkMail($order)
+                                    );
+
+                                    Notification::make()->title('Email sent')->success()->send();
+                                }),
+                        ])
+                        ->hidden(fn (?Order $record) => $record?->status !== OrderStatus::New)
                     ])
                     ->columnSpan(['lg' => 1])
                     ->hidden(fn (?Order $record) => $record === null),
@@ -171,7 +274,17 @@ class OrderResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('number')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.name')->searchable()->sortable()->toggleable(),
+                Tables\Columns\TextColumn::make('customer_full_name')
+                    ->label('Customer')
+                    ->getStateUsing(function ($record) {
+                        $first = optional($record->customer)->first_name;
+                        $last  = optional($record->customer)->last_name;
+                        $display = trim(($first.' '.$last)) ?: optional($record->customer)->name;
+                        return $display ?: null;
+                    })
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
                 Tables\Columns\TextColumn::make('total_price')->searchable()->sortable()->money()->summarize([
                     Tables\Columns\Summarizers\Sum::make()->money(),
@@ -305,6 +418,7 @@ class OrderResource extends Resource
                             ->label('Send Email')
                             ->icon('heroicon-o-envelope')
                             ->color('success')
+                            ->visible(fn ($record) => filled(optional($record->customer)->email))
                             ->extraAttributes([
                                 'x-data' => '{ sent: false }',
                                 'x-on:click' => new HtmlString('if (!sent) { sent = true }'),
@@ -342,7 +456,7 @@ class OrderResource extends Resource
     public static function getRelations(): array
     {
         return [
-            PaymentsRelationManager::class,
+            // PaymentsRelationManager::class, // temporarily disabled in favor of modal action on Orders table
         ];
     }
 
@@ -364,7 +478,7 @@ class OrderResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['number', 'customer.name'];
+        return ['number', 'customer.first_name', 'customer.last_name'];
     }
 
     public static function getGlobalSearchResultDetails(Model $record): array
@@ -412,20 +526,41 @@ class OrderResource extends Resource
                     $query->where('client_id', $user->client_id);
                 })
                 ->getOptionLabelFromRecordUsing(function (Customer $record) {
-                    $name = $record->name ?: ('Customer #'.$record->id);
+                    $first = $record->first_name ?: '';
+                    $last  = $record->last_name ?: '';
+                    $display = trim(($first.' '.$last)) ?: ($record->name ?: ('Customer #'.$record->id));
                     $email = $record->email ? ' (' . $record->email . ')' : '';
-                    return $name.$email;
+                    return $display.$email;
                 })
                 ->preload()
                 ->searchable()
                 ->required()
                 ->createOptionForm([
-                    Forms\Components\TextInput::make('name')->required()->maxLength(255),
-                    Forms\Components\TextInput::make('email')->label('Email address')->required()->email()->maxLength(255)->unique(),
-                    Forms\Components\TextInput::make('phone')->maxLength(255),
-                    Forms\Components\Select::make('gender')->placeholder('Select gender')->options(['male' => 'Male','female' => 'Female'])->required()->native(false),
+                    Forms\Components\TextInput::make('first_name')->label('First name')->required()->maxLength(255),
+                    Forms\Components\TextInput::make('last_name')->label('Last name')->maxLength(255),
+                    Forms\Components\TextInput::make('email')->label('Email address')->email()->maxLength(255)->unique(),
+                    Forms\Components\TextInput::make('phone')->required()->maxLength(255),
+                    Forms\Components\Select::make('gender')->placeholder('Select gender')->options(['male' => 'Male','female' => 'Female'])->native(false),
                 ])
-                ->createOptionAction(fn (Action $action) => $action->modalHeading('Create customer')->modalSubmitActionLabel('Create customer')->modalWidth('lg')),
+                ->createOptionAction(fn (Action $action) =>
+                    $action
+                        ->modalHeading('Create customer')
+                        ->modalSubmitActionLabel('Create customer')
+                        ->modalWidth('lg')
+                        ->mutateFormDataUsing(function (array $data): array {
+                            $user = Auth::user();
+                            if ($user) {
+                                $data['client_id'] = $user->client_id;
+                                $data['user_id'] = $user->id;
+                            }
+                            $first = trim($data['first_name'] ?? '');
+                            $last  = trim($data['last_name'] ?? '');
+                            if ($first !== '' || $last !== '') {
+                                $data['name'] = trim($first . ' ' . $last);
+                            }
+                            return $data;
+                        })
+                ),
 
             Forms\Components\Select::make('shipping_method_id')
                 ->label('Shipping method')
@@ -452,15 +587,48 @@ class OrderResource extends Resource
                 ->searchable()
                 ->required(),
 
-            Forms\Components\ToggleButtons::make('status')
-                ->inline()
-                ->options(OrderStatus::class)
-                ->required(),
+//            Forms\Components\ToggleButtons::make('status')
+//                ->inline()
+//                ->options(OrderStatus::class)
+//                ->required(),
 
             AddressForm::make('address')->columnSpan('full'),
 
             Forms\Components\MarkdownEditor::make('notes')->columnSpan('full'),
         ];
+    }
+
+    public static function mutateDataWithAddressValidation(array $data): array
+    {
+        // Only validate US addresses
+        $addr = $data['address'] ?? null;
+        if (!$addr || ($addr['country'] ?? 'US') !== 'US') {
+            return $data;
+        }
+
+        [$ok, $msg, $normalized] = app(UspsAddressService::class)->validateUsAddress([
+            'street' => $addr['street'] ?? null,
+            'city'   => $addr['city'] ?? null,
+            'state'  => $addr['state'] ?? null,
+            'zip'    => $addr['zip'] ?? null,
+        ]);
+
+        if (!$ok) {
+            // Inject filament validation error hints across related fields
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'address.street' => [$msg],
+                'address.city'   => [$msg],
+                'address.state'  => [$msg],
+                'address.zip'    => [$msg],
+            ]);
+        }
+
+        $data['address']['street'] = $normalized['street'] ?? $data['address']['street'] ?? null;
+        $data['address']['city']   = $normalized['city']   ?? $data['address']['city']   ?? null;
+        $data['address']['state']  = $normalized['state']  ?? $data['address']['state']  ?? null;
+        $data['address']['zip']    = $normalized['zip']    ?? $data['address']['zip']    ?? null;
+
+        return $data;
     }
 
     public static function getItemsRepeater(): Repeater

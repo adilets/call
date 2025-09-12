@@ -23,6 +23,8 @@ class Customer extends Model
         'client_id',
         'user_id',
         'name',
+        'first_name',
+        'last_name',
         'email',
         'photo',
         'gender',
@@ -36,6 +38,18 @@ class Customer extends Model
     protected $casts = [
         'birthday' => 'date',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Customer $customer) {
+            $first = trim((string) $customer->first_name);
+            $last  = trim((string) $customer->last_name);
+
+            if ($first !== '' || $last !== '') {
+                $customer->name = trim($first . ' ' . $last);
+            }
+        });
+    }
 
     /** @return HasMany<Order> */
     public function comments(): HasMany

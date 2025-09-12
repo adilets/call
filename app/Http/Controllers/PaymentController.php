@@ -9,6 +9,7 @@ use App\Mail\PaymentConfirmationMail;
 use App\Mail\PaymentLinkMail;
 use App\Models\Order;
 use App\Models\PaymentLink;
+use App\Models\ShippingMethod;
 use App\Models\CurrencyRate;
 use App\Services\Email\EmailService;
 use App\Services\PayEasyService;
@@ -70,12 +71,19 @@ class PaymentController extends Controller
             'EUR' => 'eu',
         ];
 
-        // Countries list (same source as in Order creation form)
-        $countries = (new Countries())
-            ->all()
-            ->mapWithKeys(fn ($c) => [$c->cca2 => $c->name->common])
-            ->sort()
-            ->toArray();
+        // Countries list: restrict to United States only
+        $countries = ['US' => 'United States'];
+
+        // US states list (postal => name)
+        $states = config('geo.us_states');
+
+        // Shipping methods at operator (user) level who created this order
+        $shippingMethods = ShippingMethod::query()
+            ->where('client_id', $order->client_id)
+            ->where('user_id', $order->user_id)
+            ->where('enabled', true)
+            ->orderBy('name')
+            ->get();
 
         return view('payment.page', [
             'order'            => $order,
@@ -84,6 +92,8 @@ class PaymentController extends Controller
             'currencySymbols'  => $currencySymbols,
             'flagByCode'       => $flagByCode,
             'countries'        => $countries,
+            'states'           => $states,
+            'shippingMethods'  => $shippingMethods,
         ]);
     }
 
@@ -121,8 +131,9 @@ class PaymentController extends Controller
             'currency' => 'nullable|in:USD,EUR',
             'shipping_method_id' => 'nullable|integer|exists:shipping_methods,id',
 
-            'billingFullName'  => 'required|string|max:255',
-            'billingCountry'   => 'nullable|string|max:3',
+            'billingFirstname'  => 'required|string|max:255',
+            'billingLastname'  => 'nullable|string|max:255',
+            'billingCountry'   => 'required|string|max:3',
             'billingAddress'   => 'required|string|max:255',
             'billingCity'      => 'nullable|string|max:255',
             'billingState'     => 'nullable|string|max:255',
@@ -131,7 +142,8 @@ class PaymentController extends Controller
 
             'shippingSame'     => 'nullable|boolean',
 
-            'shippingFullName' => 'nullable|string|max:255',
+            'shippingFirstname' => 'nullable|string|max:255',
+            'shippingLastname' => 'nullable|string|max:255',
             'shippingCountry'  => 'nullable|string|max:3',
             'shippingAddress'  => 'nullable|string|max:255',
             'shippingCity'     => 'nullable|string|max:255',
@@ -158,6 +170,8 @@ class PaymentController extends Controller
 
         // 3) Save BILLING address
         $billingData = [
+            'first_name' => $validated['billingFirstname'] ?? null,
+            'last_name'  => $validated['billingLastname'] ?? null,
             'country' => $validated['billingCountry'] ?? null,
             'street'  => $validated['billingAddress'] ?? null,
             'city'    => $validated['billingCity'] ?? null,
@@ -170,13 +184,34 @@ class PaymentController extends Controller
             $billingData
         );
 
+        // Update customer's first/last name if billing names changed
+        $billingFirst = trim((string) ($validated['billingFirstname'] ?? ''));
+        $billingLast  = trim((string) ($validated['billingLastname'] ?? ''));
+        if ($order->customer) {
+            $customer = $order->customer;
+            $changed = false;
+            if ($billingFirst !== '' && $customer->first_name !== $billingFirst) {
+                $customer->first_name = $billingFirst;
+                $changed = true;
+            }
+
+            if ($billingLast !== '' && $customer->last_name !== $billingLast) {
+                $customer->last_name = $billingLast;
+                $changed = true;
+            }
+
+            if ($changed) {
+                $customer->save();
+            }
+        }
+
         // 4) Save SHIPPING address
         $shippingSame = (bool) ($validated['shippingSame'] ?? false);
 
         // если shippingSame=true → копируем billingData
         // иначе — только если что-то из shipping-полей было передано
         $hasShippingInput = !empty($validated['shippingAddress'])
-            || !empty($validated['shippingFullName'])
+            || !empty($validated['shippingFirstname'])
             || !empty($validated['shippingCountry'])
             || !empty($validated['shippingCity'])
             || !empty($validated['shippingState'])
@@ -187,6 +222,8 @@ class PaymentController extends Controller
             $shippingData = $shippingSame
                 ? $billingData
                 : [
+                    'first_name' => $validated['shippingFirstname'] ?? null,
+                    'last_name'  => $validated['shippingLastname'] ?? null,
                     'country' => $validated['shippingCountry'] ?? null,
                     'street'  => $validated['shippingAddress'] ?? null,
                     'city'    => $validated['shippingCity'] ?? null,
@@ -204,14 +241,12 @@ class PaymentController extends Controller
         $order->status = OrderStatus::Processing;
         $order->save();
 
-        [$firstName, $lastName] = $this->splitFullName($validated['billingFullName'] ?? '');
-
         // 6) Charge
         try {
             $paymentResponse = $payEasyService->chargeCard($order, [
                 'cardNumber' => $validated['cardNumber'],
-                'firstname'  => $firstName,
-                'lastname'   => $lastName,
+                'firstname'  => $validated['billingFirstname'],
+                'lastname'   => $validated['billingLastname'] ?? null,
                 'expiry'     => $validated['expiry'],
                 'cvc'        => $validated['cvc'],
                 'fl_sid'     => $validated['fl_sid'],
@@ -267,19 +302,5 @@ class PaymentController extends Controller
                 'message' => 'Payment failed to initialize',
             ], 500);
         }
-    }
-
-    private function splitFullName(?string $fullName): array {
-        $fullName = trim((string) $fullName);
-
-        if ($fullName === '') {
-            return [null, null];
-        }
-
-        $parts = preg_split('/\s+/', $fullName);
-        $first = array_shift($parts);
-        $last  = count($parts) ? implode(' ', $parts) : '-';
-
-        return [$first, $last];
     }
 }
