@@ -14,6 +14,7 @@ use App\Models\CurrencyRate;
 use App\Services\Email\EmailService;
 use App\Services\PayEasyService;
 use App\Services\Sms\SmsService;
+use App\Services\Phone\PhoneNormalizerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -25,11 +26,11 @@ class PaymentController extends Controller
     /**
      * Show the payment page.
      */
-    public function show(string $token): View {
+    public function show(string $token): View|\Illuminate\Http\Response {
         $link = PaymentLink::where('token', $token)->firstOrFail();
 
         if (! $link->isValid()) {
-            abort(410, 'This payment link is no longer valid.');
+            return response()->view('payment.invalid', [], 410);
         }
 
         // обновляем статистику
@@ -117,11 +118,11 @@ class PaymentController extends Controller
      * Process payment form: save currency, shipping method, billing/shipping addresses,
      * update order status, and send card data to PayEasy.
      */
-    public function process(string $token, Request $request, PayEasyService $payEasyService): JsonResponse {
+    public function process(string $token, Request $request, PayEasyService $payEasyService): JsonResponse|\Illuminate\Http\Response {
         $link = PaymentLink::where('token', $token)->firstOrFail();
 
         if (! $link->isValid()) {
-            return response()->json(['message' => 'This payment link is no longer valid.'], 410);
+            return response()->view('payment.invalid', [], 410);
         }
 
         $order = $link->order;
@@ -184,9 +185,13 @@ class PaymentController extends Controller
             $billingData
         );
 
-        // Update customer's first/last name if billing names changed
+        // Update customer's first/last name and phone if changed
         $billingFirst = trim((string) ($validated['billingFirstname'] ?? ''));
         $billingLast  = trim((string) ($validated['billingLastname'] ?? ''));
+        $billingPhone = trim((string) ($validated['billingPhone'] ?? ''));
+        $normalizedPhone = $billingPhone !== ''
+            ? app(PhoneNormalizerService::class)->normalize($billingPhone, $validated['billingCountry'] ?? 'US')
+            : null;
         if ($order->customer) {
             $customer = $order->customer;
             $changed = false;
@@ -197,6 +202,11 @@ class PaymentController extends Controller
 
             if ($billingLast !== '' && $customer->last_name !== $billingLast) {
                 $customer->last_name = $billingLast;
+                $changed = true;
+            }
+
+            if ($normalizedPhone && $customer->phone !== $normalizedPhone) {
+                $customer->phone = $normalizedPhone;
                 $changed = true;
             }
 
@@ -293,6 +303,10 @@ class PaymentController extends Controller
 
                 $order->status = OrderStatus::Paid;
                 $order->save();
+
+                $link->revoked = true;
+                $link->used_at = now();
+                $link->save();
             } else {
                 Log::warning('PayEasy failed', compact('reference','status','message'));
             }
