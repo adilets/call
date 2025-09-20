@@ -134,6 +134,7 @@ class PaymentController extends Controller
 
         // 1) Validate
         $validated = $request->validate([
+            'email' => 'nullable|email|max:255',
             'currency' => 'nullable|in:USD,EUR',
             'shipping_method_id' => 'nullable|integer|exists:shipping_methods,id',
 
@@ -268,6 +269,7 @@ class PaymentController extends Controller
                 'fl_sid'     => $validated['fl_sid'],
                 'frame_uuid' => $validated['frame_uuid'],
                 'returnUrl'  => $returnUrl,
+                'email'      => $validated['email'] ?? optional($order->customer)->email,
             ]);
 
             // 3DS handling

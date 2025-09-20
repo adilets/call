@@ -40,7 +40,7 @@ class PayEasyService
             'cardNumber' => $params['cardNumber'] ?? '',
             'expirationDate' => $expirationDate,
             'cvv' => $params['cvc'] ?? '',
-            'email' => optional($order->customer)->email,
+            'email' => $params['email'] ?? optional($order->customer)->email,
             'firstname' => $params['firstname'],
             'lastname' => $params['lastname'],
             'address1' => optional($order->address)->street,
