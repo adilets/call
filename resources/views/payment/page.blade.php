@@ -29,7 +29,7 @@
                                 <button class="btn btn-outline-primary d-flex align-items-center justify-content-center flex-grow-1 currency-btn {{ $isActive ? 'active' : '' }}"
                                     data-currency="{{ $code }}" data-rate="{{ number_format((float)$rate, 6, '.', '') }}" data-symbol="{{ $symbol }}">
                                     @if($flag)
-                                        <img src="https://flagcdn.com/w20/{{ $flag }}.png" alt="{{ $code }}" class="me-2" width="20" height="20">
+                                        <img src="https://flagcdn.com/w40/{{ $flag }}.png" alt="{{ $code }}" class="me-2" width="30" height="20">
                                     @endif
                                     <span class="currency-code">{{ $code }}</span>
                                 </button>
@@ -317,6 +317,67 @@
         document.getElementById('shippingSame').addEventListener('change', function () {
             document.querySelector('.shipping-details').style.display = this.checked ? 'none' : 'block';
         });
+
+        // GB counties support
+        const gbCounties = @json($gbCounties ?? []);
+        const stateLabel = document.querySelector('label[for="state"]') || document.createElement('label');
+        const shippingStateLabel = document.querySelector('label[for="shippingState"]') || document.createElement('label');
+
+        function populateStateOptions(selectEl, isGB) {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = isGB ? 'Select county' : 'Select state';
+            selectEl.appendChild(placeholder);
+
+            if (isGB) {
+                gbCounties.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    selectEl.appendChild(opt);
+                });
+            } else {
+                // Rebuild from server-rendered US states
+                @foreach(($states ?? []) as $code => $name)
+                    (function(){
+                        const opt = document.createElement('option');
+                        opt.value = '{{ $code }}';
+                        opt.textContent = '{{ $name }}';
+                        selectEl.appendChild(opt);
+                    })();
+                @endforeach
+            }
+        }
+
+        function toggleRegion(countrySelectId, stateSelectId) {
+            const countryEl = document.getElementById(countrySelectId);
+            const stateEl = document.getElementById(stateSelectId);
+            if (!countryEl || !stateEl) return;
+
+            const isGB = countryEl.value === 'GB';
+            populateStateOptions(stateEl, isGB);
+
+            // Change label text next to select (visual only)
+            const labelEl = stateEl.closest('.col-3')?.querySelector('label');
+            if (labelEl) {
+                labelEl.textContent = isGB ? 'County' : 'State';
+            } else {
+                // If no label in markup, adjust placeholder only (done above)
+            }
+        }
+
+        document.getElementById('country').addEventListener('change', function(){
+            toggleRegion('country', 'state');
+        });
+        document.getElementById('shippingCountry').addEventListener('change', function(){
+            toggleRegion('shippingCountry', 'shippingState');
+        });
+
+        // Initialize on load (respect pre-filled billing country)
+        toggleRegion('country', 'state');
+        toggleRegion('shippingCountry', 'shippingState');
 
         // Currency selection: recalc amounts based on USD base and selected rate
         const currencyBtns = document.querySelectorAll('.currency-btn');

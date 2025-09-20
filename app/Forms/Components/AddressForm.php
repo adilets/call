@@ -77,8 +77,16 @@ class AddressForm extends Forms\Components\Field
                             }
                         }]),
                     Forms\Components\Select::make('state')
-                        ->label('State')
-                        ->options(config('geo.us_states'))
+                        ->label(fn (Get $get) => ($get('country') === 'GB') ? 'County' : 'State')
+                        ->options(function (Get $get) {
+                            $country = $get('country') ?? 'US';
+                            if ($country === 'GB') {
+                                // Return counties as [name => name]
+                                $counties = config('geo.gb_counties') ?? [];
+                                return $counties;
+                            }
+                            return config('geo.us_states');
+                        })
                         ->searchable()
                         ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
                             $result = self::validateUspsOnce($get);

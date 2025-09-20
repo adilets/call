@@ -78,8 +78,9 @@ class PaymentController extends Controller
             'GB' => 'United Kingdom',
         ];
 
-        // US states list (postal => name)
+        // Region lists
         $states = config('geo.us_states');
+        $gbCounties = array_values(config('geo.gb_counties') ?? []);
 
         // Shipping methods at operator (user) level who created this order
         $shippingMethods = ShippingMethod::query()
@@ -98,6 +99,7 @@ class PaymentController extends Controller
             'countries'        => $countries,
             'states'           => $states,
             'shippingMethods'  => $shippingMethods,
+            'gbCounties'       => $gbCounties,
         ]);
     }
 
