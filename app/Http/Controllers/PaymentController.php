@@ -72,8 +72,11 @@ class PaymentController extends Controller
             'EUR' => 'eu',
         ];
 
-        // Countries list: restrict to United States only
-        $countries = ['US' => 'United States'];
+        // Countries list: United States and United Kingdom
+        $countries = [
+            'US' => 'United States',
+            'GB' => 'United Kingdom',
+        ];
 
         // US states list (postal => name)
         $states = config('geo.us_states');
@@ -253,6 +256,7 @@ class PaymentController extends Controller
 
         // 6) Charge
         try {
+            $returnUrl = route('payment.thanks', ['token' => $token]);
             $paymentResponse = $payEasyService->chargeCard($order, [
                 'cardNumber' => $validated['cardNumber'],
                 'firstname'  => $validated['billingFirstname'],
@@ -260,8 +264,20 @@ class PaymentController extends Controller
                 'expiry'     => $validated['expiry'],
                 'cvc'        => $validated['cvc'],
                 'fl_sid'     => $validated['fl_sid'],
-                'frame_uuid' => $validated['frame_uuid']
+                'frame_uuid' => $validated['frame_uuid'],
+                'returnUrl'  => $returnUrl,
             ]);
+
+            // 3DS handling
+            if (!empty($paymentResponse['redirectUrl']) && !empty($paymentResponse['transactionId'])) {
+                // Frontend should redirect to this URL to complete 3DS
+                return response()->json([
+                    'success' => true,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => $paymentResponse['redirectUrl'],
+                    'transactionId' => $paymentResponse['transactionId'],
+                ]);
+            }
 
             $reference = $paymentResponse['id'] ?? null;
             $success   = (bool) ($paymentResponse['success'] ?? false);
@@ -288,7 +304,6 @@ class PaymentController extends Controller
                         new PaymentConfirmationMail($order, $descriptor)
                     );
                 }
-
 
                 $amount = Money::USD((int) round($order->total_price * 100))
                     ->convert(new Currency($order->currency ?? 'USD'), $order->rate ?? 1)

@@ -50,6 +50,7 @@ class AddressForm extends Forms\Components\Field
                         ->label('Country')
                         ->options([
                             'US' => 'United States',
+                            'GB' => 'United Kingdom',
                         ])
                         ->default('US')
                         ->required(),

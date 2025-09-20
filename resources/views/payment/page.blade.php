@@ -161,6 +161,7 @@
                         </div>
                         <select class="form-select mb-3" id="country">
                             <option value="US" selected>United States</option>
+                            <option value="GB">United Kingdom</option>
                         </select>
                         <input type="text" class="form-control mb-3" placeholder="Address" id="address" value="{{ $billing?->street }}">
                         <div class="row">
@@ -192,6 +193,7 @@
                             </div>
                             <select class="form-select mb-3" id="shippingCountry">
                                 <option value="US" selected>United States</option>
+                                <option value="GB">United Kingdom</option>
                             </select>
                             <input type="text" class="form-control mb-3" placeholder="Address" id="shippingAddress">
                             <div class="row">
@@ -438,6 +440,12 @@
             })
                 .then(response => response.json())
                 .then(data => {
+                    if (data && data.requiresRedirect && data.redirectUrl) {
+                        // 3DS required: redirect user to ACS/3DS page
+                        window.location.replace(data.redirectUrl);
+                        return;
+                    }
+
                     if (!data.success) {
                         showAlert('danger', data.message ?? 'Payment failed. Please verify your card details or try again later.');
 
