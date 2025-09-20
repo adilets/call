@@ -160,8 +160,8 @@
                             </div>
                         </div>
                         <select class="form-select mb-3" id="country">
-                            <option value="US" selected>United States</option>
-                            <option value="GB">United Kingdom</option>
+                            <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
+                            <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
                         </select>
                         <input type="text" class="form-control mb-3" placeholder="Address" id="address" value="{{ $billing?->street }}">
                         <div class="row">
@@ -192,8 +192,8 @@
                                 </div>
                             </div>
                             <select class="form-select mb-3" id="shippingCountry">
-                                <option value="US" selected>United States</option>
-                                <option value="GB">United Kingdom</option>
+                                <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
+                                <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
                             </select>
                             <input type="text" class="form-control mb-3" placeholder="Address" id="shippingAddress">
                             <div class="row">
