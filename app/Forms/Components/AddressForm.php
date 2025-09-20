@@ -96,6 +96,7 @@ class AddressForm extends Forms\Components\Field
                         }]),
                     Forms\Components\TextInput::make('zip')
                         ->label('Zip / Postal code')
+                        ->placeholder(fn (Get $get) => ($get('country') === 'GB') ? 'Postcode' : 'ZIP')
                         ->maxLength(255)
                         ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
                             $result = self::validateUspsOnce($get);

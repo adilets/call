@@ -366,6 +366,12 @@
             } else {
                 // If no label in markup, adjust placeholder only (done above)
             }
+
+            // Update ZIP/Postcode placeholder
+            const zipInput = document.getElementById(countrySelectId === 'country' ? 'zip' : 'shippingZip');
+            if (zipInput) {
+                zipInput.setAttribute('placeholder', isGB ? 'Postcode' : 'ZIP');
+            }
         }
 
         document.getElementById('country').addEventListener('change', function(){
