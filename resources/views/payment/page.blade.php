@@ -167,7 +167,7 @@
                         <div class="row">
                             <div class="col-6"><input type="text" class="form-control mb-3" placeholder="City" id="city" value="{{ $billing?->city }}"></div>
                             <div class="col-3">
-                                <select class="form-select mb-3" id="state">
+                                <select class="form-select mb-3" id="state" data-current-value="{{ $billing?->state }}">
                                     <option value="">Select state</option>
                                     @foreach(($states ?? []) as $code => $name)
                                         <option value="{{ $code }}" {{ strtoupper($billing?->state) === $code ? 'selected' : '' }}>{{ $name }}</option>
@@ -199,7 +199,7 @@
                             <div class="row">
                                 <div class="col-6"><input type="text" class="form-control mb-3" placeholder="City" id="shippingCity"></div>
                                 <div class="col-3">
-                                    <select class="form-select mb-3" id="shippingState">
+                                    <select class="form-select mb-3" id="shippingState" data-current-value="">
                                         <option value="">Select state</option>
                                         @foreach(($states ?? []) as $code => $name)
                                             <option value="{{ $code }}">{{ $name }}</option>
@@ -325,6 +325,7 @@
 
         function populateStateOptions(selectEl, isGB) {
             if (!selectEl) return;
+            const current = (selectEl.getAttribute('data-current-value') || '').toString();
             selectEl.innerHTML = '';
             const placeholder = document.createElement('option');
             placeholder.value = '';
@@ -336,6 +337,7 @@
                     const opt = document.createElement('option');
                     opt.value = name;
                     opt.textContent = name;
+                    if (current && current.toLowerCase() === name.toLowerCase()) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
             } else {
@@ -345,6 +347,7 @@
                         const opt = document.createElement('option');
                         opt.value = '{{ $code }}';
                         opt.textContent = '{{ $name }}';
+                        if (current && current.toUpperCase() === '{{ $code }}') opt.selected = true;
                         selectEl.appendChild(opt);
                     })();
                 @endforeach
@@ -381,7 +384,7 @@
             toggleRegion('shippingCountry', 'shippingState');
         });
 
-        // Initialize on load (respect pre-filled billing country)
+        // Initialize on load (respect pre-filled billing country and state/county)
         toggleRegion('country', 'state');
         toggleRegion('shippingCountry', 'shippingState');
 
