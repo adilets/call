@@ -605,6 +605,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 },
                 body: JSON.stringify({
@@ -622,7 +623,33 @@
                         showAlert('danger', `${firstError}${details ? ': ' + details : ''}`);
                         throw new Error('validation');
                     }
-                    return response.json()
+                    if (!response.ok) {
+                        if (response.status === 419) {
+                            showAlert('danger', 'Session expired. Please refresh the page and try again.');
+                            throw new Error('csrf');
+                        }
+                        const ct = response.headers.get('content-type') || '';
+                        if (ct.includes('application/json')) {
+                            const errJson = await response.json().catch(() => ({}));
+                            const msg = errJson?.message || `Request failed (${response.status})`;
+                            showAlert('danger', msg);
+                            throw new Error('http');
+                        } else {
+                            const text = await response.text().catch(() => '');
+                            const snippet = (text || '').slice(0, 200);
+                            showAlert('danger', snippet ? snippet : `Request failed (${response.status})`);
+                            throw new Error('http');
+                        }
+                    }
+                    // Try JSON first, then fallback to text
+                    const ct = response.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                        return response.json();
+                    } else {
+                        const text = await response.text();
+                        showAlert('danger', text ? text.slice(0, 200) : 'Unexpected response from server.');
+                        throw new Error('non-json');
+                    }
                 })
                 .then(data => {
                     if (data && data.requiresRedirect && data.redirectUrl) {
@@ -642,8 +669,8 @@
 
                     window.location.replace(url);
                 })
-                .catch(_ => {
-                    if (_ && _.message === 'validation') return;
+                .catch(err => {
+                    if (err && (err.message === 'validation' || err.message === 'csrf' || err.message === 'http' || err.message === 'non-json')) return;
                     showAlert('warning', 'An error occurred during payment processing.');
                 })
                 .finally(() => {
