@@ -144,7 +144,7 @@ class PaymentController extends Controller
             'billingAddress'   => 'required|string|max:255',
             'billingCity'      => 'nullable|string|max:255',
             'billingState'     => 'nullable|string|max:255',
-            'billingZip'       => 'required|string|max:32',
+            'billingZip'       => 'nullable|string|max:32',
             'billingPhone'     => 'required|string|max:64',
 
             'shippingSame'     => 'nullable|boolean',
@@ -155,8 +155,8 @@ class PaymentController extends Controller
             'shippingAddress'  => 'nullable|string|max:255',
             'shippingCity'     => 'nullable|string|max:255',
             'shippingState'    => 'nullable|string|max:255',
-            'shippingZip'      => 'required_if:shippingSame,false|string|max:32',
-            'shippingPhone'    => 'required_if:shippingSame,false|string|max:64',
+            'shippingZip'      => 'nullable|string|max:32',
+            'shippingPhone'    => 'nullable|string|max:64',
 
             'cardNumber' => 'required|string',
             'expiry'     => 'required|string',
