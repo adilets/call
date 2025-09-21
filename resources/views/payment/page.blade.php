@@ -174,7 +174,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-3"><input type="text" class="form-control mb-3" placeholder="ZIP" id="zip" value="{{ $billing?->zip }}"></div>
+                            <div class="col-3"><input type="text" class="form-control mb-3" placeholder="ZIP" id="zip" value="{{ $billing?->zip }}" required></div>
                         </div>
                         <input type="tel" class="form-control mb-3" placeholder="Phone number (e.g., 070-123 45 67)" id="phone" value="{{ $billingPhone }}" required>
                         <div class="form-check mt-3">
@@ -472,13 +472,14 @@
             const emailEl = document.getElementById('email');
             const firstNameEl = document.getElementById('firstName');
             const addressEl = document.getElementById('address');
+            const zipEl = document.getElementById('zip');
             const phoneEl = document.getElementById('phone');
             const cardNumEl = document.querySelector('.card-number');
             const expiryEl = document.querySelector('.expiry');
             const cvcEl = document.querySelector('.cvc');
             const shippingSame = document.getElementById('shippingSame')?.checked;
 
-            [emailEl, firstNameEl, addressEl, phoneEl, cardNumEl, expiryEl, cvcEl].forEach(clearFieldError);
+            [emailEl, firstNameEl, addressEl, phoneEl, zipEl, cardNumEl, expiryEl, cvcEl].forEach(clearFieldError);
             document.querySelectorAll('input[name="shipping"]').forEach(r => r.classList.remove('is-invalid'));
 
             if (!emailEl || !emailEl.value || !emailEl.checkValidity()) {
@@ -496,6 +497,10 @@
             if (!phoneEl || !phoneEl.value.trim()) {
                 showFieldError(phoneEl, 'Phone is required');
                 errors.push(phoneEl);
+            }
+            if (!zipEl || !zipEl.value.trim()) {
+                showFieldError(zipEl, 'ZIP is required');
+                errors.push(zipEl);
             }
             if (!document.querySelector('input[name="shipping"]:checked')) {
                 document.querySelectorAll('input[name="shipping"]').forEach(r => r.classList.add('is-invalid'));
@@ -518,10 +523,12 @@
                 const sFirst = document.getElementById('shippingFirstName');
                 const sAddr = document.getElementById('shippingAddress');
                 const sPhone = document.getElementById('shippingPhone');
-                [sFirst, sAddr, sPhone].forEach(clearFieldError);
+                const sZip = document.getElementById('shippingZip');
+                [sFirst, sAddr, sPhone, sZip].forEach(clearFieldError);
                 if (!sFirst || !sFirst.value.trim()) { showFieldError(sFirst, 'Required'); errors.push(sFirst); }
                 if (!sAddr || !sAddr.value.trim()) { showFieldError(sAddr, 'Required'); errors.push(sAddr); }
                 if (!sPhone || !sPhone.value.trim()) { showFieldError(sPhone, 'Required'); errors.push(sPhone); }
+                if (!sZip || !sZip.value.trim()) { showFieldError(sZip, 'Required'); errors.push(sZip); }
             }
 
             if (errors.length > 0) {
