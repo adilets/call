@@ -134,7 +134,7 @@ class PaymentController extends Controller
 
         // 1) Validate
         $validated = $request->validate([
-            'email' => 'nullable|email|max:255',
+            'email' => 'required|email|max:255',
             'currency' => 'nullable|in:USD,EUR',
             'shipping_method_id' => 'nullable|integer|exists:shipping_methods,id',
 

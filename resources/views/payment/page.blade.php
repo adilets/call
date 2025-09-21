@@ -149,7 +149,7 @@
                     @endphp
                     <div class="card-body">
                         <h5 class="card-title">Billing Information</h5>
-                        <input type="email" class="form-control mb-3" placeholder="Email" id="email" value="{{ $billingEmail }}">
+                        <input type="email" class="form-control mb-3" placeholder="Email" id="email" value="{{ $billingEmail }}" required>
                         <h6 class="mt-3">Billing Address</h6>
                         <div class="row">
                             <div class="col-6">
@@ -176,7 +176,7 @@
                             </div>
                             <div class="col-3"><input type="text" class="form-control mb-3" placeholder="ZIP" id="zip" value="{{ $billing?->zip }}"></div>
                         </div>
-                        <input type="tel" class="form-control mb-3" placeholder="Phone number (e.g., 070-123 45 67)" id="phone" value="{{ $billingPhone }}">
+                        <input type="tel" class="form-control mb-3" placeholder="Phone number (e.g., 070-123 45 67)" id="phone" value="{{ $billingPhone }}" required>
                         <div class="form-check mt-3">
                             <input type="checkbox" class="form-check-input" id="shippingSame" checked>
                             <label class="form-check-label" for="shippingSame">Shipping info is same as billing</label>
@@ -445,7 +445,98 @@
         });
 
         const payBtn = document.querySelector('.pay-btn');
+
+        // Click-time validation: highlight problematic inputs and show hints
+        function clearFieldError(el) {
+            if (!el) return;
+            el.classList.remove('is-invalid');
+            const feedback = el.nextElementSibling;
+            if (feedback && feedback.classList && feedback.classList.contains('invalid-feedback')) {
+                feedback.remove();
+            }
+        }
+        function showFieldError(el, message) {
+            if (!el) return;
+            el.classList.add('is-invalid');
+            // Append small invalid-feedback element if not present
+            const exists = el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('invalid-feedback');
+            if (!exists) {
+                const div = document.createElement('div');
+                div.className = 'invalid-feedback';
+                div.textContent = message || 'This field is required.';
+                el.parentNode.insertBefore(div, el.nextSibling);
+            }
+        }
+        function validateOnClickAndMark() {
+            const errors = [];
+            const emailEl = document.getElementById('email');
+            const firstNameEl = document.getElementById('firstName');
+            const addressEl = document.getElementById('address');
+            const phoneEl = document.getElementById('phone');
+            const cardNumEl = document.querySelector('.card-number');
+            const expiryEl = document.querySelector('.expiry');
+            const cvcEl = document.querySelector('.cvc');
+            const shippingSame = document.getElementById('shippingSame')?.checked;
+
+            [emailEl, firstNameEl, addressEl, phoneEl, cardNumEl, expiryEl, cvcEl].forEach(clearFieldError);
+            document.querySelectorAll('input[name="shipping"]').forEach(r => r.classList.remove('is-invalid'));
+
+            if (!emailEl || !emailEl.value || !emailEl.checkValidity()) {
+                showFieldError(emailEl, 'Enter a valid email');
+                errors.push(emailEl);
+            }
+            if (!firstNameEl || !firstNameEl.value.trim()) {
+                showFieldError(firstNameEl, 'First name is required');
+                errors.push(firstNameEl);
+            }
+            if (!addressEl || !addressEl.value.trim()) {
+                showFieldError(addressEl, 'Address is required');
+                errors.push(addressEl);
+            }
+            if (!phoneEl || !phoneEl.value.trim()) {
+                showFieldError(phoneEl, 'Phone is required');
+                errors.push(phoneEl);
+            }
+            if (!document.querySelector('input[name="shipping"]:checked')) {
+                document.querySelectorAll('input[name="shipping"]').forEach(r => r.classList.add('is-invalid'));
+                errors.push(document.querySelector('input[name="shipping"]'));
+            }
+            if (!cardNumEl || !cardNumEl.value.trim()) {
+                showFieldError(cardNumEl, 'Card number is required');
+                errors.push(cardNumEl);
+            }
+            if (!expiryEl || !expiryEl.value.trim()) {
+                showFieldError(expiryEl, 'Expiry is required');
+                errors.push(expiryEl);
+            }
+            if (!cvcEl || !cvcEl.value.trim()) {
+                showFieldError(cvcEl, 'CVC is required');
+                errors.push(cvcEl);
+            }
+
+            if (shippingSame === false) {
+                const sFirst = document.getElementById('shippingFirstName');
+                const sAddr = document.getElementById('shippingAddress');
+                const sPhone = document.getElementById('shippingPhone');
+                [sFirst, sAddr, sPhone].forEach(clearFieldError);
+                if (!sFirst || !sFirst.value.trim()) { showFieldError(sFirst, 'Required'); errors.push(sFirst); }
+                if (!sAddr || !sAddr.value.trim()) { showFieldError(sAddr, 'Required'); errors.push(sAddr); }
+                if (!sPhone || !sPhone.value.trim()) { showFieldError(sPhone, 'Required'); errors.push(sPhone); }
+            }
+
+            if (errors.length > 0) {
+                showAlert('danger', 'Please correct the highlighted fields.');
+                // Focus first invalid
+                const first = errors.find(Boolean);
+                if (first && typeof first.focus === 'function') first.focus();
+                return false;
+            }
+            return true;
+        }
+
         payBtn.addEventListener('click', function () {
+            // Pre-submit UI validation
+            if (!validateOnClickAndMark()) return;
             const formData = {
                 email: document.getElementById('email').value,
                 billingFirstname: document.getElementById('firstName').value,
@@ -471,6 +562,14 @@
                 fl_sid: document.getElementById('fl_sid')?.value,
                 frame_uuid: document.getElementById('frame_uuid')?.value
             };
+
+            // Email required and valid
+            const emailEl = document.getElementById('email');
+            if (!emailEl.value || !emailEl.checkValidity()) {
+                showAlert('danger', 'Please enter a valid email address.');
+                emailEl.focus();
+                return;
+            }
 
             // Валидация (пример)
             const shippingSame = document.getElementById('shippingSame').checked;
@@ -508,7 +607,16 @@
                     shipping_method_id: document.querySelector('input[name="shipping"]:checked')?.getAttribute('data-method-id') || null,
                 })
             })
-                .then(response => response.json())
+                .then(async response => {
+                    if (response.status === 422) {
+                        const data = await response.json();
+                        const firstError = data?.message || 'Validation failed';
+                        const details = data?.errors ? Object.values(data.errors).flat().join(' ') : '';
+                        showAlert('danger', `${firstError}${details ? ': ' + details : ''}`);
+                        throw new Error('validation');
+                    }
+                    return response.json()
+                })
                 .then(data => {
                     if (data && data.requiresRedirect && data.redirectUrl) {
                         // 3DS required: redirect user to ACS/3DS page
@@ -528,6 +636,7 @@
                     window.location.replace(url);
                 })
                 .catch(_ => {
+                    if (_ && _.message === 'validation') return;
                     showAlert('warning', 'An error occurred during payment processing.');
                 })
                 .finally(() => {
