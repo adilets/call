@@ -602,6 +602,7 @@
                     ...formData,
                     shippingSame: document.getElementById('shippingSame').checked,
                     currency: 'EUR',
+                    rate: parseFloat(document.querySelector('.total')?.getAttribute('data-selected-rate')) || 1.0,
                     shipping_method_id: document.querySelector('input[name="shipping"]:checked')?.getAttribute('data-method-id') || null,
                 })
             })

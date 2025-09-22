@@ -165,13 +165,19 @@ class PaymentController extends Controller
             'frame_uuid' => 'required|string',
         ]);
 
-        // 2) Persist currency & shipping method
+        // 2) Persist currency, rate & shipping method
         if (isset($validated['currency'])) {
             $order->currency = $validated['currency'];
         }
+
+        if ($request->filled('rate')) {
+            $order->rate = (float) $request->input('rate');
+        }
+
         if (isset($validated['shipping_method_id'])) {
             $order->shipping_method_id = (int) $validated['shipping_method_id'];
         }
+
         $order->save();
 
         // 3) Save BILLING address

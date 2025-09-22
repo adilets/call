@@ -33,9 +33,20 @@ class PayEasyService
             $expirationDate = sprintf('%04d-%02d', $year, $month);
         }
 
+        // Compute amount according to order currency and rate
+        $baseUsd = (float) ($order->total_price ?? 0);
+        $currency = $order->currency ?? 'USD';
+        $rate = (float) ($order->rate ?? 1.0);
+        $amount = $baseUsd;
+
+        if (strtoupper($currency) === 'EUR') {
+            // total_price stored in USD; convert to EUR using rate (USD->EUR)
+            $amount = $rate > 0 ? $baseUsd * $rate : $baseUsd;
+        }
+
         $payload = [
-            'amount' => (float) ($order->total_price ?? 0),
-            'currency' => $order->currency ?? 'USD',
+            'amount' => (float) $amount,
+            'currency' => $currency,
             'ref_id' => $order->id,
             'cardNumber' => $params['cardNumber'] ?? '',
             'expirationDate' => $expirationDate,
