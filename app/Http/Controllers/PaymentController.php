@@ -58,9 +58,8 @@ class PaymentController extends Controller
             'EUR' => $rateEur > 0 ? $rateEur : 1.0, // fallback to 1.0 if not present
         ];
 
-        $selectedCurrency = in_array($order->currency, ['USD', 'EUR'], true)
-            ? $order->currency
-            : 'USD';
+        // Force EUR as the selected currency for now
+        $selectedCurrency = 'EUR';
 
         $currencySymbols = [
             'USD' => '$',
