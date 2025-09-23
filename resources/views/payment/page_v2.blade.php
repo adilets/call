@@ -529,15 +529,26 @@
         } catch (_) {}
       }
       const cb=$('shipSame'); cb.addEventListener('change',()=>{ const show = !cb.checked; const sec=$('shippingSection'); sec.classList.toggle('hidden', !show); });
-      // Sync phone input country on billing country change
+      // On billing country change: update region/select labels & phone country
       if (billCountryEl) {
         billCountryEl.addEventListener('change', ()=>{
+          // Update UI (State/County label, ZIP/Postcode placeholder, region options)
+          updateCountryDependentUI('bill');
+          // Sync phone country
           try {
             if (window.itiBilling) {
               const iso = (billCountryEl.value === 'GB') ? 'gb' : 'us';
               window.itiBilling.setCountry(iso);
             }
           } catch(_) {}
+        });
+      }
+
+      // On shipping country change: update region/select labels and options
+      const shipCountryEl = document.getElementById('shipCountry');
+      if (shipCountryEl) {
+        shipCountryEl.addEventListener('change', ()=>{
+          updateCountryDependentUI('ship');
         });
       }
 
