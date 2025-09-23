@@ -16,7 +16,7 @@
                     $symbolForSelected = $currencySymbols[$selectedCurrency] ?? $selectedCurrency . ' ';
                 @endphp
 
-                <div class="card shadow">
+                <div class="card shadow mb-4">
                     <div class="card-body">
                         <h5 class="card-title">Select Currency</h5>
                         <div class="d-flex gap-2 flex-wrap">
@@ -50,7 +50,7 @@
                     $currencySymbol = $symbolForSelected;
                 @endphp
 
-                <div class="card shadow mt-4">
+                <div class="card shadow">
                     <div class="card-body">
                         @forelse($items as $item)
                             <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
@@ -611,6 +611,7 @@
                     ...formData,
                     shippingSame: document.getElementById('shippingSame').checked,
                     currency: document.querySelector('.currency-btn.active')?.getAttribute('data-currency') || 'USD',
+                    rate: parseFloat(document.querySelector('.total')?.getAttribute('data-selected-rate')) || 1.0,
                     shipping_method_id: document.querySelector('input[name="shipping"]:checked')?.getAttribute('data-method-id') || null,
                 })
             })
