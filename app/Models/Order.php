@@ -34,6 +34,7 @@ class Order extends Model
         'payeasy_transaction_id',
         'payment_link',
         'shipping_method_id',
+        'customer_id',
         'client_id',
         'user_id',
         'rate'

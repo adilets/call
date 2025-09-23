@@ -7,6 +7,7 @@ use App\Models\Client;
 use Illuminate\Support\Facades\Auth;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -43,6 +44,17 @@ class ClientResource extends Resource
                             ->label('PayEasy Path')
                             ->helperText('Custom path for PayEasy endpoints, provided by the provider')
                             ->maxLength(255),
+
+                        Select::make('currencies')
+                            ->label('Currencies')
+                            ->multiple()
+                            ->options([
+                                'USD' => 'USD',
+                                'EUR' => 'EUR',
+                            ])
+                            ->helperText('Select allowed checkout currencies (USD/EUR).')
+                            ->preload()
+                            ->searchable(),
                     ])
                     ->columns(2),
             ]);

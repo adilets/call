@@ -53,8 +53,73 @@ class OrderResource extends Resource
             ->schema([
                 Forms\Components\Group::make()
                     ->schema([
-                        Forms\Components\Section::make()
+                        Forms\Components\Section::make('Customer Information')
                             ->schema(static::getDetailsFormSchema())
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed(),
+
+                        Forms\Components\Section::make('Order Information')
+                            ->schema([
+                                Forms\Components\Select::make('currency')
+                                    ->label('Currency')
+                                    ->options(function () {
+                                        $user = Auth::user();
+                                        $allowed = [];
+                                        if ($user && $user->client_id) {
+                                            $client = \App\Models\Client::find($user->client_id);
+                                            $allowed = is_array($client?->currencies) ? $client->currencies : [];
+                                        }
+                                        $allowed = array_values(array_unique(array_filter($allowed)));
+                                        if (empty($allowed)) {
+                                            $allowed = ['USD','EUR'];
+                                        }
+                                        $labels = [
+                                            'USD' => 'US Dollar',
+                                            'EUR' => 'Euro',
+                                        ];
+                                        $opts = [];
+                                        foreach ($allowed as $code) {
+                                            $opts[$code] = $labels[$code] ?? $code;
+                                        }
+                                        return $opts;
+                                    })
+                                    ->default(function () {
+                                        $user = Auth::user();
+                                        if ($user && $user->client_id) {
+                                            $client = \App\Models\Client::find($user->client_id);
+                                            $arr = is_array($client?->currencies) ? $client->currencies : [];
+                                            return $arr[0] ?? 'USD';
+                                        }
+                                        return 'USD';
+                                    })
+                                    ->searchable()
+                                    ->required(),
+
+                                Forms\Components\Select::make('shipping_method_id')
+                                    ->label('Shipping method')
+                                    ->required()
+                                    ->options(fn () => ShippingMethod::query()->where('client_id', optional(Auth::user())->client_id)->where('enabled', true)->orderBy('name')->pluck('name', 'id'))
+                        ->default(function (?Order $record) {
+                            if ($record && $record->shipping_method_id) {
+                                return $record->shipping_method_id;
+                            }
+                            $clientId = optional(Auth::user())->client_id;
+                            return ShippingMethod::query()
+                                ->where('client_id', $clientId)
+                                ->where('enabled', true)
+                                ->orderBy('name')
+                                ->value('id');
+                        })
+                                    ->searchable()
+                                    ->preload()
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        $shippingPrice = ShippingMethod::find($state)?->cost ?? 0;
+                                        $set('shipping_price', $shippingPrice);
+                                    })
+                                    ->reactive()
+                                    ->afterStateUpdated(fn () => null),
+                            ])
                             ->columns(2),
 
                         Forms\Components\Section::make('Order items')
@@ -84,7 +149,8 @@ class OrderResource extends Resource
                                             ->where('currency', $currency)
                                             ->value('rate') ?? 1;
 
-                                        return Money::$currency((int) round($costUsd * $rate * 100))->format();
+                                        $cents = (int) round($costUsd * $rate * 100);
+                                        return Money::$currency($cents)->format();
                                     })
                                     ->reactive()
                                     ->live(),
@@ -102,7 +168,8 @@ class OrderResource extends Resource
                                             ->where('currency', $currency)
                                             ->value('rate') ?? 1;
 
-                                        return Money::$currency((int) round($itemsTotal * $rate * 100))->format();
+                                        $itemsCents = (int) round($itemsTotal * $rate * 100);
+                                        return Money::$currency($itemsCents)->format();
                                     })
                                     ->reactive()
                                     ->live(),
@@ -122,9 +189,12 @@ class OrderResource extends Resource
                                             ->where('currency', $currency)
                                             ->value('rate') ?? 1;
 
-                                        $total = ($itemsTotal + $shippingCostUsd) * $rate;
+                                        // Convert each part to cents and then sum to match checkout rounding
+                                        $itemsCents = (int) round($itemsTotal * $rate * 100);
+                                        $shipCents  = (int) round($shippingCostUsd * $rate * 100);
+                                        $totalCents = $itemsCents + $shipCents;
 
-                                        return Money::$currency((int) round($total * 100))->format();
+                                        return Money::$currency($totalCents)->format();
                                     })
                                     ->reactive()
                                     ->live(),
@@ -292,11 +362,35 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_price_converted')
                     ->label('Total (Local)')
-                    ->getStateUsing(fn ($record) =>
-                    Money::USD((int) round($record->total_price * 100))
-                        ->convert(new Currency($record->currency ?? 'USD'), $record->rate ?? 1)
-                        ->format()
-                    ),
+                    ->getStateUsing(function ($record) {
+                        $currency = strtoupper($record->currency ?? 'USD');
+                        $rate = (float) ($record->rate ?? 1.0);
+                        // Compute items total from items to avoid double-counting shipping if stored in total_price
+                        $baseUsd = (float) ($record->items()->get()->sum(function ($i) {
+                            return (float) ($i->qty ?? 0) * (float) ($i->unit_price ?? 0);
+                        }) ?: ($record->total_price ?? 0));
+
+                        $shippingUsd = $record->shipping_price;
+
+                        if ($currency === 'USD') {
+                            $totalCents = (int) round(($baseUsd + $shippingUsd) * 100);
+                            return Money::USD($totalCents)->format();
+                        }
+
+                        if ($currency === 'EUR') {
+                            // Convert parts separately to cents, then sum
+                            $subCents  = (int) round($baseUsd * $rate * 100);
+                            $shipCents = (int) round($shippingUsd * $rate * 100);
+                            $amountCents = $subCents + $shipCents;
+                            return Money::EUR($amountCents)->format();
+                        }
+
+                        // Fallback: generic conversion like EUR case
+                        $subCents  = (int) round($baseUsd * $rate * 100);
+                        $shipCents = (int) round($shippingUsd * $rate * 100);
+                        $amountCents = $subCents + $shipCents;
+                        return Money::$currency($amountCents)->format();
+                    }),
 
                 Tables\Columns\TextColumn::make('shippingMethod.name')
                     ->label('Shipping')
@@ -498,94 +592,89 @@ class OrderResource extends Resource
     public static function getDetailsFormSchema(): array
     {
         return [
-            Forms\Components\Select::make('customer_id')
-                ->label('Customer')
-                ->relationship('customer', 'name', function (Builder $query) {
-                    $user = Auth::user();
+            Forms\Components\Hidden::make('customer_id')->dehydrated(),
 
-                    if (!$user) {
-                        $query->whereRaw('1=0');
-                        return;
-                    }
-
-                    if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('admin')) {
-                        // no scope
-                        return;
-                    }
-
-                    if ($user instanceof User && method_exists($user, 'hasRole') && ($user->hasRole('manager') || $user->hasRole('client'))) {
-                        $query->where('client_id', $user->client_id);
-                        return;
-                    }
-
-                    if ($user instanceof User && method_exists($user, 'hasRole') && $user->hasRole('operator')) {
-                        $query->where('client_id', $user->client_id)->where('user_id', $user->id);
-                        return;
-                    }
-
-                    $query->where('client_id', $user->client_id);
-                })
-                ->getOptionLabelFromRecordUsing(function (Customer $record) {
-                    $first = $record->first_name ?: '';
-                    $last  = $record->last_name ?: '';
-                    $display = trim(($first.' '.$last)) ?: ($record->name ?: ('Customer #'.$record->id));
-                    $email = $record->email ? ' (' . $record->email . ')' : '';
-                    return $display.$email;
-                })
-                ->preload()
+            Forms\Components\Select::make('customer_lookup')
+                ->label('Find customer by email')
+                ->placeholder('Type to search by email')
                 ->searchable()
-                ->required()
-                ->createOptionForm([
-                    Forms\Components\TextInput::make('first_name')->label('First name')->required()->maxLength(255),
-                    Forms\Components\TextInput::make('last_name')->label('Last name')->maxLength(255),
-                    Forms\Components\TextInput::make('email')->label('Email address')->email()->maxLength(255)->unique(),
-                    Forms\Components\TextInput::make('phone')->required()->maxLength(255),
-                    Forms\Components\Select::make('gender')->placeholder('Select gender')->options(['male' => 'Male','female' => 'Female'])->native(false),
-                ])
-                ->createOptionAction(fn (Action $action) =>
-                    $action
-                        ->modalHeading('Create customer')
-                        ->modalSubmitActionLabel('Create customer')
-                        ->modalWidth('lg')
-                        ->mutateFormDataUsing(function (array $data): array {
-                            $user = Auth::user();
-                            if ($user) {
-                                $data['client_id'] = $user->client_id;
-                                $data['user_id'] = $user->id;
-                            }
-                            $first = trim($data['first_name'] ?? '');
-                            $last  = trim($data['last_name'] ?? '');
-                            if ($first !== '' || $last !== '') {
-                                $data['name'] = trim($first . ' ' . $last);
-                            }
-                            return $data;
-                        })
-                ),
-
-            Forms\Components\Select::make('shipping_method_id')
-                ->label('Shipping method')
-                ->required()
-                ->options(fn () => ShippingMethod::query()->where('client_id', optional(Auth::user())->client_id)->where('enabled', true)->orderBy('name')->pluck('name', 'id'))
-                ->searchable()
-                ->preload()
-                ->afterStateUpdated(function ($state, callable $set) {
-                    $shippingPrice = ShippingMethod::find($state)?->cost ?? 0;
-                    $set('shipping_price', $shippingPrice);
+                ->dehydrated(false)
+                ->columnSpan('full')
+                ->afterStateHydrated(function (callable $set, ?Order $record) {
+                    if ($record && $record->customer) {
+                        $customer = $record->customer;
+                        $set('customer_lookup', $customer->id);
+                        $set('customer_id', $customer->id);
+                        $set('customer_email', $customer->email);
+                        $set('customer_phone', $customer->phone);
+                        $set('customer_first_name', $customer->first_name);
+                        $set('customer_last_name', $customer->last_name);
+                    }
                 })
+                ->getSearchResultsUsing(function (string $search) {
+                    $clientId = optional(Auth::user())->client_id;
+                    if (!$clientId || trim($search) === '') {
+                        return [];
+                    }
+                    return Customer::query()
+                        ->where('client_id', $clientId)
+                        ->where('email', 'like', '%' . $search . '%')
+                        ->orderBy('email')
+                        ->limit(20)
+                        ->pluck('email', 'id')
+                        ->toArray();
+                })
+                ->getOptionLabelUsing(fn ($value) => optional(Customer::find($value))->email)
                 ->reactive()
-                ->afterStateUpdated(fn () => null),
+                ->afterStateUpdated(function ($state, callable $set) {
+                    $customer = Customer::find($state);
+                    if ($customer) {
+                        $set('customer_id', $customer->id);
+                        $set('customer_email', $customer->email);
+                        $set('customer_phone', $customer->phone);
+                        $set('customer_first_name', $customer->first_name);
+                        $set('customer_last_name', $customer->last_name);
+                    }
+                })
+                ->helperText('Optional. Pick existing by email or type below to leave empty.'),
 
-            Forms\Components\Select::make('currency')
-                ->label('Currency')
-                ->options([
-                    'USD' => 'US Dollar',
-                    'EUR' => 'Euro',
-                    'GBP' => 'British Pound',
-                    'AUD' => 'Australian Dollar',
-                ])
-                ->default('USD')
-                ->searchable()
-                ->required(),
+            Forms\Components\TextInput::make('customer_first_name')
+                ->label('First name')
+                ->default(fn (?Order $record) => optional(optional($record)->customer)->first_name)
+                ->dehydrated(false)
+                ->columnSpan(1),
+
+            Forms\Components\TextInput::make('customer_last_name')
+                ->label('Last name')
+                ->default(fn (?Order $record) => optional(optional($record)->customer)->last_name)
+                ->dehydrated(false)
+                ->columnSpan(1),
+
+            Forms\Components\TextInput::make('customer_email')
+                ->label('Email')
+                ->email()
+                ->default(fn (?Order $record) => optional(optional($record)->customer)->email)
+                ->dehydrated(false)
+                ->reactive()
+                ->columnSpan(1)
+                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                    $selectedId = $get('customer_id');
+                    if ($selectedId) {
+                        $current = Customer::find($selectedId);
+                        if ($current && $current->email !== $state) {
+                            $set('customer_id', null);
+                            $set('customer_lookup', null);
+                        }
+                    }
+                }),
+
+            Forms\Components\TextInput::make('customer_phone')
+                ->label('Phone')
+                ->default(fn (?Order $record) => optional(optional($record)->customer)->phone)
+                ->dehydrated(false)
+                ->columnSpan(1),
+
+
 
 //            Forms\Components\ToggleButtons::make('status')
 //                ->inline()

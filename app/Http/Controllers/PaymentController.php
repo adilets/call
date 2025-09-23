@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Mail\PaymentConfirmationMail;
 use App\Mail\PaymentLinkMail;
 use App\Models\Order;
+use App\Models\Customer;
 use App\Models\PaymentLink;
 use App\Models\ShippingMethod;
 use App\Models\CurrencyRate;
@@ -47,18 +48,24 @@ class PaymentController extends Controller
          */
         $order = $link->order;
 
-        // Build currency set: only USD and EUR
+        // Build currency set based on client settings (fallback to USD/EUR)
         $rateEur = (float) (CurrencyRate::query()
             ->where('source', 'USD')
             ->where('currency', 'EUR')
             ->value('rate') ?? 0);
 
-        $currencies = [
-            'USD' => 1.0,
-            'EUR' => $rateEur > 0 ? $rateEur : 1.0, // fallback to 1.0 if not present
-        ];
+        $clientCurrencies = is_array(optional($order->client)->currencies) ? $order->client->currencies : [];
+        $clientCurrencies = array_values(array_unique(array_filter($clientCurrencies)));
+        if (empty($clientCurrencies)) {
+            $clientCurrencies = ['USD','EUR'];
+        }
+        $currencies = [];
+        foreach ($clientCurrencies as $code) {
+            if ($code === 'USD') $currencies['USD'] = 1.0;
+            if ($code === 'EUR') $currencies['EUR'] = $rateEur > 0 ? $rateEur : 1.0;
+        }
 
-        $selectedCurrency = in_array($order->currency, ['USD', 'EUR'], true)
+        $selectedCurrency = in_array($order->currency, $clientCurrencies, true)
             ? $order->currency
             : 'USD';
 
@@ -67,10 +74,7 @@ class PaymentController extends Controller
             'EUR' => '€',
         ];
 
-        $flagByCode = [
-            'USD' => 'us',
-            'EUR' => 'eu',
-        ];
+        $flagByCode = [ 'USD' => 'us', 'EUR' => 'eu' ];
 
         // Countries list: United States and United Kingdom
         $countries = [
@@ -90,7 +94,9 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('payment.page', [
+//        $view = request()->boolean('v2') ? 'payment.page_v2' : 'payment.page';
+
+        return view('payment.page_v2', [
             'order'            => $order,
             'currencies'       => $currencies,
             'selectedCurrency' => $selectedCurrency,
@@ -181,6 +187,44 @@ class PaymentController extends Controller
 
         $order->save();
 
+        // 2.1) Attach or create Customer if missing
+        //    - Try to find by email within same client
+        //    - Update basic fields from billing if present
+        if (!$order->customer_id && !empty($validated['email'])) {
+            $existing = Customer::query()
+                ->where('client_id', $order->client_id)
+                ->where('email', $validated['email'])
+                ->first();
+
+            $billingFirst = trim((string) ($validated['billingFirstname'] ?? ''));
+            $billingLast  = trim((string) ($validated['billingLastname'] ?? ''));
+            $billingPhone = trim((string) ($validated['billingPhone'] ?? ''));
+
+            if ($existing) {
+                $order->customer_id = $existing->id;
+                $order->save();
+
+                $updated = false;
+                if ($billingFirst !== '' && $existing->first_name !== $billingFirst) { $existing->first_name = $billingFirst; $updated = true; }
+                if ($billingLast  !== '' && $existing->last_name  !== $billingLast)  { $existing->last_name  = $billingLast;  $updated = true; }
+                if ($billingPhone !== '' && $existing->phone      !== $billingPhone) { $existing->phone      = $billingPhone; $updated = true; }
+                if ($updated) { $existing->save(); }
+            } else {
+                $new = new Customer();
+                $new->client_id  = $order->client_id;
+                $new->user_id    = $order->user_id;
+                $new->email      = $validated['email'];
+                $new->first_name = $billingFirst ?: null;
+                $new->last_name  = $billingLast  ?: null;
+                $new->phone      = $billingPhone ?: null;
+                $new->name       = trim(($new->first_name.' '.$new->last_name)) ?: null;
+                $new->save();
+
+                $order->customer_id = $new->id;
+                $order->save();
+            }
+        }
+
         // 3) Save BILLING address
         $billingData = [
             'first_name' => $validated['billingFirstname'] ?? null,
@@ -266,6 +310,7 @@ class PaymentController extends Controller
         // 6) Charge
         try {
             $returnUrl = route('payment.thanks', ['token' => $token]);
+
             $paymentResponse = $payEasyService->chargeCard($order, [
                 'cardNumber' => $validated['cardNumber'],
                 'firstname'  => $validated['billingFirstname'],

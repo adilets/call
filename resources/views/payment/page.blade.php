@@ -14,8 +14,10 @@
                     // From controller: $currencies (USD, EUR), $selectedCurrency, $currencySymbols, $flagByCode
                     $selectedRate = (float)($currencies[$selectedCurrency] ?? 1.0);
                     $symbolForSelected = $currencySymbols[$selectedCurrency] ?? $selectedCurrency . ' ';
+                    $hasMultipleCurrencies = count($currencies ?? []) > 1;
                 @endphp
 
+                @if($hasMultipleCurrencies)
                 <div class="card shadow mb-4">
                     <div class="card-body">
                         <h5 class="card-title">Select Currency</h5>
@@ -38,6 +40,7 @@
                         <small class="text-muted d-block mt-1">Exchange rates and bank fees may apply</small>
                     </div>
                 </div>
+                @endif
 
                 @php
                     /** @var \App\Models\Order|null $order */
@@ -390,36 +393,55 @@
         // Currency selection: recalc amounts based on USD base and selected rate
         const currencyBtns = document.querySelectorAll('.currency-btn');
         let currentRate = parseFloat(document.querySelector('.total').getAttribute('data-selected-rate')) || 1.0;
-        let currentSymbol = document.querySelector('.pay-btn').getAttribute('data-symbol') || '$';
+        let currentSymbol = '{{ $symbolForSelected }}';
 
-        currencyBtns.forEach(btn => {
-            btn.addEventListener('click', function () {
-                currencyBtns.forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
+        if (currencyBtns.length > 0) {
+            currencyBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    currencyBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
 
-                currentRate = parseFloat(this.getAttribute('data-rate')) || 1.0;
-                currentSymbol = this.getAttribute('data-symbol') || '$';
+                    currentRate = parseFloat(this.getAttribute('data-rate')) || 1.0;
+                    currentSymbol = this.getAttribute('data-symbol') || '$';
 
-                // Update line items
-                document.querySelectorAll('.product-line-price').forEach(el => {
-                    const usd = parseFloat(el.getAttribute('data-usd-line-price')) || 0;
-                    el.textContent = `${currentSymbol}${(usd * currentRate).toFixed(2)}`;
+                    // Update line items
+                    document.querySelectorAll('.product-line-price').forEach(el => {
+                        const usd = parseFloat(el.getAttribute('data-usd-line-price')) || 0;
+                        el.textContent = `${currentSymbol}${(usd * currentRate).toFixed(2)}`;
+                    });
+
+                    // Update subtotal
+                    const subtotalEl = document.querySelector('.subtotal');
+                    const usdSubtotal = parseFloat(subtotalEl.getAttribute('data-usd-subtotal')) || 0;
+                    subtotalEl.textContent = `${currentSymbol}${(usdSubtotal * currentRate).toFixed(2)}`;
+
+                    // Update shipping (keeping current selected method cost in USD)
+                    const shippingEl = document.querySelector('.shipping-cost');
+                    const usdShipping = parseFloat(shippingEl.getAttribute('data-usd-shipping')) || 0;
+                    shippingEl.textContent = usdShipping === 0 ? 'Free' : `${currentSymbol}${(usdShipping * currentRate).toFixed(2)}`;
+
+                    // Update total and button
+                    updateGrandTotal();
                 });
-
-                // Update subtotal
-                const subtotalEl = document.querySelector('.subtotal');
+            });
+        } else {
+            // No selector: ensure amounts reflect initial currency
+            document.querySelectorAll('.product-line-price').forEach(el => {
+                const usd = parseFloat(el.getAttribute('data-usd-line-price')) || 0;
+                el.textContent = `${currentSymbol}${(usd * currentRate).toFixed(2)}`;
+            });
+            const subtotalEl = document.querySelector('.subtotal');
+            if (subtotalEl) {
                 const usdSubtotal = parseFloat(subtotalEl.getAttribute('data-usd-subtotal')) || 0;
                 subtotalEl.textContent = `${currentSymbol}${(usdSubtotal * currentRate).toFixed(2)}`;
-
-                // Update shipping (keeping current selected method cost in USD)
-                const shippingEl = document.querySelector('.shipping-cost');
+            }
+            const shippingEl = document.querySelector('.shipping-cost');
+            if (shippingEl) {
                 const usdShipping = parseFloat(shippingEl.getAttribute('data-usd-shipping')) || 0;
                 shippingEl.textContent = usdShipping === 0 ? 'Free' : `${currentSymbol}${(usdShipping * currentRate).toFixed(2)}`;
-
-                // Update total and button
-                updateGrandTotal();
-            });
-        });
+            }
+            updateGrandTotal();
+        }
 
         const addItems = document.querySelectorAll('.add-item');
         addItems.forEach(item => {
@@ -610,7 +632,7 @@
                 body: JSON.stringify({
                     ...formData,
                     shippingSame: document.getElementById('shippingSame').checked,
-                    currency: document.querySelector('.currency-btn.active')?.getAttribute('data-currency') || 'USD',
+                    currency: document.querySelector('.currency-btn.active')?.getAttribute('data-currency') || '{{ $selectedCurrency }}',
                     rate: parseFloat(document.querySelector('.total')?.getAttribute('data-selected-rate')) || 1.0,
                     shipping_method_id: document.querySelector('input[name="shipping"]:checked')?.getAttribute('data-method-id') || null,
                 })

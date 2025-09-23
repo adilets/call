@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\ShippingMethod;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -33,19 +34,33 @@ class PayEasyService
             $expirationDate = sprintf('%04d-%02d', $year, $month);
         }
 
-        // Compute amount according to order currency and rate
+        // Compute amount according to order currency and rate (items + shipping)
         $baseUsd = (float) ($order->total_price ?? 0);
-        $currency = $order->currency ?? 'USD';
-        $rate = (float) ($order->rate ?? 1.0);
-        $amount = $baseUsd;
+        $shippingUsd = 0.0;
 
-        if (strtoupper($currency) === 'EUR') {
-            // total_price stored in USD; convert to EUR using rate (USD->EUR)
-            $amount = $rate > 0 ? $baseUsd * $rate : $baseUsd;
+        if ($order->shipping_method_id) {
+            $shippingUsd = (float) (ShippingMethod::find($order->shipping_method_id)?->cost ?? 0);
         }
 
+        $amountUsd = $baseUsd + $shippingUsd;
+        $currency = $order->currency ?? 'USD';
+        $rate = (float) ($order->rate ?? 1.0);
+        $amount = $amountUsd;
+
+        if (strtoupper($currency) == 'EUR') {
+            // Match frontend logic: convert each part (items, shipping) separately, round to cents, then sum
+            $subCents  = (int) round($baseUsd * max($rate, 0) * 100);
+            $shipCents = (int) round($shippingUsd * max($rate, 0) * 100);
+            $amountCents = $subCents + $shipCents;
+            $amount = $amountCents / 100;
+        }
+
+        // Format amount to 2 decimals (string) to meet provider expectations
+        $amountCentsFinal = (int) round($amount * 100);
+        $amountFormatted = number_format($amountCentsFinal / 100, 2, '.', '');
+
         $payload = [
-            'amount' => (float) $amount,
+            'amount' => $amountFormatted,
             'currency' => $currency,
             'ref_id' => $order->id,
             'cardNumber' => $params['cardNumber'] ?? '',
@@ -66,6 +81,8 @@ class PayEasyService
             'ipaddress' => request()->ip(),
             'pp' => 'cc'
         ];
+
+        dd($payload);
 
         $payload = array_filter($payload, static fn ($v) => !is_null($v));
 
