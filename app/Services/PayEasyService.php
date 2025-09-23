@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CurrencyRate;
 use App\Models\Order;
 use App\Models\ShippingMethod;
 use Illuminate\Http\Client\ConnectionException;
@@ -34,20 +35,20 @@ class PayEasyService
             $expirationDate = sprintf('%04d-%02d', $year, $month);
         }
 
-        // Compute amount according to order currency and rate (items + shipping)
-        $baseUsd = (float) ($order->total_price ?? 0);
-        $shippingUsd = 0.0;
-
-        if ($order->shipping_method_id) {
-            $shippingUsd = (float) (ShippingMethod::find($order->shipping_method_id)?->cost ?? 0);
-        }
+        $baseUsd = (float) (($order->total_price - $order->shipping_price) ?? 0);
+        $shippingUsd = $order->shipping_price ?? 0.0;
 
         $amountUsd = $baseUsd + $shippingUsd;
         $currency = $order->currency ?? 'USD';
-        $rate = (float) ($order->rate ?? 1.0);
+
         $amount = $amountUsd;
 
         if (strtoupper($currency) == 'EUR') {
+            $rate = (float) CurrencyRate::query()
+                ->where('source', 'USD')
+                ->where('currency', 'EUR')
+                ->value('rate') ?: 1.0;
+
             // Match frontend logic: convert each part (items, shipping) separately, round to cents, then sum
             $subCents  = (int) round($baseUsd * max($rate, 0) * 100);
             $shipCents = (int) round($shippingUsd * max($rate, 0) * 100);
@@ -81,8 +82,6 @@ class PayEasyService
             'ipaddress' => request()->ip(),
             'pp' => 'cc'
         ];
-
-        dd($payload);
 
         $payload = array_filter($payload, static fn ($v) => !is_null($v));
 
