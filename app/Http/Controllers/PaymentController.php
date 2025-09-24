@@ -225,7 +225,7 @@ class PaymentController extends Controller
             }
         }
 
-        // 3) Save BILLING address
+        // 3) Billing address used only for payment – do not persist in DB anymore
         $billingData = [
             'first_name' => $validated['billingFirstname'] ?? null,
             'last_name'  => $validated['billingLastname'] ?? null,
@@ -235,11 +235,6 @@ class PaymentController extends Controller
             'state'   => $validated['billingState'] ?? null,
             'zip'     => $validated['billingZip'] ?? null,
         ];
-
-        $order->addresses()->updateOrCreate(
-            ['type' => 'billing'],
-            $billingData
-        );
 
         // Update customer's first/last name and phone if changed
         $billingFirst = trim((string) ($validated['billingFirstname'] ?? ''));
@@ -271,7 +266,7 @@ class PaymentController extends Controller
             }
         }
 
-        // 4) Save SHIPPING address
+        // 4) Save SHIPPING address (only address we store)
         $shippingSame = (bool) ($validated['shippingSame'] ?? false);
 
         // если shippingSame=true → копируем billingData
@@ -297,10 +292,7 @@ class PaymentController extends Controller
                     'zip'     => $validated['shippingZip'] ?? null,
                 ];
 
-            $order->addresses()->updateOrCreate(
-                ['type' => 'shipping'],
-                $shippingData
-            );
+            $order->address()->updateOrCreate([], $shippingData);
         }
 
         // 5) Status → processing

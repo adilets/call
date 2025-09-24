@@ -119,8 +119,24 @@ class OrderResource extends Resource
                                     })
                                     ->reactive()
                                     ->afterStateUpdated(fn () => null),
+
+                                Forms\Components\MarkdownEditor::make('notes')
+                                    ->label('Notes')
+                                    ->columnSpan('full'),
                             ])
                             ->columns(2),
+
+                        Forms\Components\Section::make('Shipping Address')
+                            ->schema([
+                                AddressForm::make('address')
+                                    ->relationship('address')
+                                    ->columnSpan('full')
+                                    ->disabled(fn (?Order $record) => $record !== null),
+                            ])
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed()
+                            ->hidden(fn (?Order $record) => $record === null),
 
                         Forms\Components\Section::make('Order items')
                             ->headerActions([
@@ -674,16 +690,14 @@ class OrderResource extends Resource
                 ->dehydrated(false)
                 ->columnSpan(1),
 
-
-
 //            Forms\Components\ToggleButtons::make('status')
 //                ->inline()
 //                ->options(OrderStatus::class)
 //                ->required(),
 
-            AddressForm::make('address')->columnSpan('full'),
+            // Remove billing address capture from DB – use only for payment (checkout)
 
-            Forms\Components\MarkdownEditor::make('notes')->columnSpan('full'),
+
         ];
     }
 

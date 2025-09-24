@@ -44,6 +44,18 @@ class AddressForm extends Forms\Components\Field
     public function getChildComponents(): array
     {
         return [
+            // Name
+            Forms\Components\Grid::make(2)
+                ->schema([
+                    Forms\Components\TextInput::make('first_name')
+                        ->label('First name')
+                        ->maxLength(255),
+
+                    Forms\Components\TextInput::make('last_name')
+                        ->label('Last name')
+                        ->maxLength(255),
+                ]),
+
             Forms\Components\Grid::make()
                 ->schema([
                     Forms\Components\Select::make('country')

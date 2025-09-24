@@ -140,7 +140,7 @@
             </div>
 
             <div class="mb-4">
-              <label for="billAddress1" class="block text-sm font-medium text-slate-700">Address line 1 <span class="text-red-600">*</span></label>
+              <label for="billAddress1" class="block text-sm font-medium text-slate-700">Address line <span class="text-red-600">*</span></label>
               <input id="billAddress1" value="{{ $billing?->street }}" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" required />
               <p id="err-billAddress1" class="hidden text-sm text-red-600"></p>
             </div>
@@ -207,7 +207,7 @@
             </div>
 
             <div class="mb-4">
-              <label for="shipAddress1" class="block text-sm font-medium text-slate-700">Address line 1 <span class="text-red-600">*</span></label>
+              <label for="shipAddress1" class="block text-sm font-medium text-slate-700">Address line<span class="text-red-600">*</span></label>
               <input id="shipAddress1" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" />
               <p id="err-shipAddress1" class="hidden text-sm text-red-600"></p>
             </div>
