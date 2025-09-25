@@ -63,6 +63,9 @@ class AddressForm extends Forms\Components\Field
                         ->options([
                             'US' => 'United States',
                             'GB' => 'United Kingdom',
+                            'AU' => 'Australia',
+                            'FR' => 'France',
+                            'DE' => 'Germany',
                         ])
                         ->default('US')
                         ->required(),
@@ -94,8 +97,16 @@ class AddressForm extends Forms\Components\Field
                             $country = $get('country') ?? 'US';
                             if ($country === 'GB') {
                                 // Return counties as [name => name]
-                                $counties = config('geo.gb_counties') ?? [];
-                                return $counties;
+                                return config('geo.gb_counties') ?? [];
+                            }
+                            if ($country === 'AU') {
+                                return config('geo.au_states') ?? [];
+                            }
+                            if ($country === 'DE') {
+                                return config('geo.de_states') ?? [];
+                            }
+                            if ($country === 'FR') {
+                                return config('geo.fr_regions') ?? [];
                             }
                             return config('geo.us_states');
                         })
@@ -108,7 +119,7 @@ class AddressForm extends Forms\Components\Field
                         }]),
                     Forms\Components\TextInput::make('zip')
                         ->label('Zip / Postal code')
-                        ->placeholder(fn (Get $get) => ($get('country') === 'GB') ? 'Postcode' : 'ZIP')
+                        ->placeholder(fn (Get $get) => ($get('country') === 'US') ? 'ZIP' : 'Postcode')
                         ->maxLength(255)
                         ->rules(fn (Get $get) => [function (string $attribute, $value, Closure $fail) use ($get) {
                             $result = self::validateUspsOnce($get);

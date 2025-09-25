@@ -135,6 +135,9 @@
               <select id="billCountry" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" required>
                 <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
                 <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
+                <option value="AU" {{ (($billing?->country ?? 'US') === 'AU') ? 'selected' : '' }}>Australia</option>
+                <option value="FR" {{ (($billing?->country ?? 'US') === 'FR') ? 'selected' : '' }}>France</option>
+                <option value="DE" {{ (($billing?->country ?? 'US') === 'DE') ? 'selected' : '' }}>Germany</option>
               </select>
               <p id="err-billCountry" class="hidden text-sm text-red-600"></p>
             </div>
@@ -202,6 +205,9 @@
               <select id="shipCountry" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2">
                 <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
                 <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
+                <option value="AU" {{ (($billing?->country ?? 'US') === 'AU') ? 'selected' : '' }}>Australia</option>
+                <option value="FR" {{ (($billing?->country ?? 'US') === 'FR') ? 'selected' : '' }}>France</option>
+                <option value="DE" {{ (($billing?->country ?? 'US') === 'DE') ? 'selected' : '' }}>Germany</option>
               </select>
               <p id="err-shipCountry" class="hidden text-sm text-red-600"></p>
             </div>
@@ -392,9 +398,17 @@
     // Country / regions (US/GB only)
     const US_STATES = @json(array_values($states ?? []));
     const GB_COUNTIES = @json(array_values($gbCounties ?? []));
+    const AU_STATES = @json(array_values($auStates ?? []));
+    const DE_STATES = @json(array_values($deStates ?? []));
+    const FR_REGIONS = @json(array_values($frRegions ?? []));
     function fillRegionSelect(selectEl, countryCode, current){
       if(!selectEl) return;
-      const list = countryCode === 'US' ? US_STATES : countryCode === 'GB' ? GB_COUNTIES : [];
+      let list = [];
+      if (countryCode === 'US') list = US_STATES;
+      else if (countryCode === 'GB') list = GB_COUNTIES;
+      else if (countryCode === 'AU') list = AU_STATES;
+      else if (countryCode === 'DE') list = DE_STATES;
+      else if (countryCode === 'FR') list = FR_REGIONS;
       selectEl.innerHTML = `<option value="">${list.length ? 'Select...' : 'N/A'}</option>` + list.map(v=>`<option${(current && current.toLowerCase()===String(v).toLowerCase())?' selected':''}>${v}</option>`).join('');
       selectEl.disabled = list.length === 0;
     }
@@ -403,10 +417,11 @@
       const regionEl = $(prefix+'Region');
       const current = regionEl.getAttribute('data-current-value') || '';
       fillRegionSelect(regionEl, country, current);
-      $(prefix+'RegionLabel').textContent = country==='US' ? 'State' : country==='GB' ? 'County' : 'State / County';
+      $(prefix+'RegionLabel').textContent = country==='US' ? 'State' : country==='GB' ? 'County' : country==='AU' ? 'State' : 'State / County';
       const labelEl = $(prefix+'PostcodeLabel');
       const inputEl = $(prefix+'Postcode');
       if(country==='US'){ labelEl.textContent='ZIP'; inputEl.placeholder='e.g., 94105'; }
+      else if(country==='AU'){ labelEl.textContent='Postcode'; inputEl.placeholder='e.g., 2000'; }
       else if(country==='GB'){ labelEl.textContent='Postcode'; inputEl.placeholder='e.g., SW1A 1AA'; }
       else { labelEl.textContent='Postcode'; inputEl.placeholder='e.g., 10115'; }
     }
@@ -610,7 +625,12 @@
       $('checkoutForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
         // quick validate + summary
-        const requiredIds=['billEmail','billFirst','billLast','billCountry','billAddress1','billCity','billRegion','billPostcode','billPhone','card','exp','cvv'];
+        const requiredIds=['billEmail','billFirst','billLast','billCountry','billAddress1','billCity','billPostcode','billPhone','card','exp','cvv'];
+        // Require region only for US and AU
+        const billCountryVal = $('billCountry').value;
+        if (billCountryVal === 'US' || billCountryVal === 'AU') {
+          requiredIds.push('billRegion');
+        }
         ERROR_REGISTRY.clear();
         for (const id of requiredIds){ const el=$(id), err=$('err-'+id); const msg = validateField(id, el?.value||''); setError(el,err,msg); if(msg) ERROR_REGISTRY.set(id, msg); }
         renderErrorSummary();
@@ -634,7 +654,7 @@
           billingCountry: $('billCountry').value,
           billingAddress: $('billAddress1').value,
           billingCity: $('billCity').value,
-          billingState: $('billRegion').value,
+          billingState: (function(){ const v=$('billRegion').value; const c=$('billCountry').value; return (c==='US'||c==='AU') ? v : (v || '-'); })(),
           billingZip: $('billPostcode').value,
           billingPhone: phoneE164,
           shippingSame: $('shipSame').checked,

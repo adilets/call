@@ -85,6 +85,9 @@ class PaymentController extends Controller
         // Region lists
         $states = config('geo.us_states');
         $gbCounties = array_values(config('geo.gb_counties') ?? []);
+        $auStates = array_values(config('geo.au_states') ?? []);
+        $deStates = array_values(config('geo.de_states') ?? []);
+        $frRegions = array_values(config('geo.fr_regions') ?? []);
 
         // Shipping methods at operator (user) level who created this order
         $shippingMethods = ShippingMethod::query()
@@ -106,6 +109,9 @@ class PaymentController extends Controller
             'states'           => $states,
             'shippingMethods'  => $shippingMethods,
             'gbCounties'       => $gbCounties,
+            'auStates'         => $auStates,
+            'deStates'         => $deStates,
+            'frRegions'        => $frRegions,
         ]);
     }
 
