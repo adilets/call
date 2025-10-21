@@ -24,6 +24,30 @@
       background-size: 16px 16px !important;    /* keep icon small */
       background-repeat: no-repeat !important;
     }
+    /* Valid UI: green underline + check icon */
+    .valid-underline { box-shadow: inset 0 -2px 0 #16a34a !important; }
+    .valid-check{
+      background-repeat: no-repeat;
+      background-position: right .6rem center;
+      background-size: 18px 18px;
+      background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='10' cy='10' r='9' stroke='%2316a34a' stroke-width='2'/%3E%3Cpath d='M6 10.5l3 3 5-6' stroke='%2316a34a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      padding-right: 2rem !important;
+    }
+    /* Tiny reference illustrations for Exp and CVV fields */
+    .with-exp-icon{
+      background-image: url("data:image/svg+xml,%3Csvg width='34' height='22' viewBox='0 0 48 32' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='1' y='1' width='46' height='30' rx='4' fill='%23fff' stroke='%23E6E9EE'/%3E%3Crect x='6' y='10' width='36' height='6' fill='%23EAF0FB'/%3E%3Crect x='28' y='20' width='14' height='4' fill='%232563EB'/%3E%3Ctext x='29' y='23' font-size='5' fill='%23fff' font-family='Arial' %3EEXP%3C/text%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .55rem center; background-size: 34px 22px;
+      padding-right: 2.3rem !important;
+    }
+    .with-cvv-icon{
+      background-image: url("data:image/svg+xml,%3Csvg width='34' height='22' viewBox='0 0 48 32' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='1' y='1' width='46' height='30' rx='4' fill='%23fff' stroke='%23E6E9EE'/%3E%3Crect x='1' y='6' width='46' height='6' fill='%23262626'/%3E%3Crect x='28' y='18' width='14' height='6' fill='%23EAF0FB' stroke='%2316a34a'/%3E%3Ctext x='31' y='22' font-size='5' fill='%23262626' font-family='Arial'%3ECVV%3C/text%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .55rem center; background-size: 34px 22px;
+      padding-right: 2.3rem !important;
+    }
+    /* Footer note show/hide */
+    .footer-note{ transition: opacity .18s ease, transform .18s ease; }
+    .footer-note.hidden-note{ opacity:0; transform:translateY(8px); visibility:hidden; pointer-events:none; }
+    .footer-note.visible-note{ opacity:1; transform:translateY(0); visibility:visible; pointer-events:auto; }
   </style>
 </head>
 <body class="min-h-screen bg-slate-50 antialiased">
@@ -260,12 +284,12 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div>
                 <label for="exp" class="block text-sm font-medium text-slate-700">Exp (MM/YY) <span class="text-red-600">*</span></label>
-                <input id="exp" inputmode="numeric" autocomplete="cc-exp" aria-describedby="err-exp" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="MM/YY" required />
+                <input id="exp" inputmode="numeric" autocomplete="cc-exp" aria-describedby="err-exp" class="with-exp-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="MM/YY" required />
                 <p id="err-exp" class="hidden text-sm text-red-600"></p>
               </div>
               <div>
                 <label for="cvv" class="block text-sm font-medium text-slate-700">CVV <span class="text-red-600">*</span></label>
-                <input id="cvv" inputmode="numeric" autocomplete="cc-csc" aria-describedby="err-cvv" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="123" required />
+                <input id="cvv" inputmode="numeric" autocomplete="cc-csc" aria-describedby="err-cvv" class="with-cvv-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="123" required />
                 <p id="err-cvv" class="hidden text-sm text-red-600"></p>
               </div>
             </div>
@@ -277,6 +301,11 @@
               <svg id="paySpinner" class="hidden h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"></circle>
                 <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+              </svg>
+              <svg id="payLock" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 10V8a5 5 0 1 1 10 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                <circle cx="12" cy="15" r="1.5" fill="currentColor"/>
               </svg>
               <span id="payLabel">Pay</span>
             </button>
@@ -293,6 +322,11 @@
       </div>
 
     </div>
+  </div>
+
+  <!-- Footer tip note (visible when Pay button is on screen) -->
+  <div id="footerNote" class="footer-note hidden-note fixed bottom-0 left-0 right-0 text-center text-[11px] md:text-xs text-red-600 bg-white/95 py-2 border-t border-red-200">
+    <span class="font-medium">Tip:</span> For a smooth payment, just click Pay once and let it process — no need to refresh or go back.
   </div>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.10.11/build/js/intlTelInputWithUtils.min.js"></script>
@@ -334,6 +368,8 @@
       $('subtotal').textContent = currentSymbol + subStr;
       $('shippingPrice').textContent = shipStr;
       $('total').textContent = currentSymbol + totalStr;
+      const payLabel = document.getElementById('payLabel');
+      if (payLabel) payLabel.textContent = `Pay ${currentSymbol}${totalStr}`;
       if(announceIt) announce(`Total updated to ${currentSymbol}${totalStr}.`);
     }
 
@@ -356,6 +392,23 @@
       if (!el) return;
       el.classList.add('hidden');
       el.textContent = '';
+    }
+
+    // Toggle Shipping section visibility + required flags and clear state when hidden
+    function setShippingVisible(show){
+      const sec=document.getElementById('shippingSection');
+      if (sec) sec.classList.toggle('hidden', !show);
+      const ids=['shipFirst','shipLast','shipCountry','shipAddress1','shipCity','shipRegion','shipPostcode'];
+      ids.forEach(id=>{
+        const el=document.getElementById(id);
+        const err=document.getElementById('err-'+id);
+        if(el){ el.toggleAttribute('required', show); }
+        if(!show && el && err){
+          // Clear error and valid UI when hiding
+          clearFieldState(el, err);
+        }
+      });
+      if (show) { updateCountryDependentUI('ship'); }
     }
 
     // Aggregated validation with summary
@@ -427,7 +480,39 @@
     }
 
     // Simple validation helpers
-    function setError(el, errEl, msg){ if(!el||!errEl) return; const bad=!!msg; el.setAttribute('aria-invalid',bad?'true':'false'); errEl.textContent=msg||''; errEl.classList.toggle('hidden', !bad); }
+    function setValidityUI(el, isValid){
+      if(!el) return;
+      if(isValid){
+        el.classList.add('valid-underline');
+        if(el.tagName !== 'SELECT'){ el.classList.add('valid-check'); } else { el.classList.remove('valid-check'); }
+      }else{
+        el.classList.remove('valid-underline','valid-check');
+      }
+    }
+    function clearFieldState(el, errEl){
+      if(!el||!errEl) return;
+      el.setAttribute('aria-invalid','false');
+      el.classList.remove('border-red-500','ring-1','ring-red-300');
+      errEl.textContent=''; errEl.classList.add('hidden');
+      setValidityUI(el,false);
+      ERROR_REGISTRY.delete(el.id);
+      renderErrorSummary();
+    }
+    function setError(el, errEl, msg){
+      if(!el||!errEl) return;
+      const bad=!!msg;
+      el.setAttribute('aria-invalid',bad?'true':'false');
+      if(bad){
+        el.classList.add('border-red-500','ring-1','ring-red-300');
+        errEl.textContent=msg||''; errEl.classList.remove('hidden');
+        setValidityUI(el,false);
+      } else {
+        el.classList.remove('border-red-500','ring-1','ring-red-300');
+        errEl.textContent=''; errEl.classList.add('hidden');
+        const hasValue = (el.value ?? '').toString().trim() !== '';
+        setValidityUI(el, hasValue);
+      }
+    }
     function validateField(name, value){
       switch(name){
         case 'billEmail': return !value ? 'Email is required' : /\S+@\S+\.\S+/.test(value) ? '' : 'Invalid email';
@@ -484,6 +569,7 @@
     const digs = (v)=> (v||'').replace(/\D/g,'');
     const detectCard=(n)=>{const d=digs(n);for(const t of CARD_TYPES)if(t.re.test(d))return t;return{key:'unk',name:'Unknown',gaps:[4,8,12],max:19,cvv:3}};
     const fmtCard=(raw,t)=>{const d=digs(raw).slice(0,t.max);const out=[];let i=0;for(const g of t.gaps){if(d.length>i){out.push(d.slice(i,g));i=g}}if(i<d.length)out.push(d.slice(i));return out.join(' ')};
+    const luhn=(s)=>{let sum=0,alt=false;const d=digs(s);for(let i=d.length-1;i>=0;i--){let n=+d[i];if(alt){n*=2;if(n>9)n-=9}sum+=n;alt=!alt}return d.length>0 && (sum%10===0)};
     function setCardIconAnimated(typeKey){
       const wrap=document.getElementById('cardIconWrap'),slot=document.getElementById('cardIcon'); const icon={
         visa:'<svg viewBox="0 0 48 32" width="40" height="26"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E6E9EE"/><text x="10" y="20" fill="#1A1F71" font-size="14" font-weight="700">VISA</text></svg>',
@@ -543,7 +629,7 @@
           });
         } catch (_) {}
       }
-      const cb=$('shipSame'); cb.addEventListener('change',()=>{ const show = !cb.checked; const sec=$('shippingSection'); sec.classList.toggle('hidden', !show); });
+      const cb=$('shipSame'); cb.addEventListener('change',()=>{ const show = !cb.checked; setShippingVisible(show); }); setShippingVisible(!cb.checked);
       // On billing country change: update region/select labels & phone country
       if (billCountryEl) {
         billCountryEl.addEventListener('change', ()=>{
@@ -568,10 +654,19 @@
       }
 
       // Simple inputs validation on blur + error registry
-      [['billEmail'],['billFirst'],['billLast'],['billCountry'],['billAddress1'],['billCity'],['billRegion'],['billPostcode'],['billPhone'],['card'],['exp'],['cvv']].forEach(([id])=>{
+      [['billEmail'],['billFirst'],['billLast'],['billCountry'],['billAddress1'],['billCity'],['billRegion'],['billPostcode'],['billPhone'],['shipFirst'],['shipLast'],['shipCountry'],['shipAddress1'],['shipCity'],['shipRegion'],['shipPostcode'],['card'],['exp'],['cvv']].forEach(([id])=>{
         const el=$(id), err=$('err-'+id); if(!el||!err) return;
         const validateNow=()=> { const msg = validateField(id, el.value); setError(el,err,msg); ERROR_REGISTRY.set(id, msg); renderErrorSummary(); };
         el.addEventListener('blur', validateNow);
+        if (el.tagName === 'SELECT') el.addEventListener('change', validateNow);
+        // Live validity feedback: on input, show green when valid, no red until blur
+        if (el.tagName !== 'SELECT') {
+          el.addEventListener('input', ()=>{
+            const msg = validateField(id, el.value);
+            if (msg === '') { setError(el, err, ''); ERROR_REGISTRY.delete(id); renderErrorSummary(); }
+            else { clearFieldState(el, err); }
+          });
+        }
       });
 
       // Card field behaviour
@@ -588,7 +683,29 @@
           if(cvvEl){ const need=t.cvv; const d=digs(cvvEl.value); cvvEl.value=d.slice(0,need); }
           // Do not show validation on input; only on blur. Clear inline error while typing.
           const err=document.getElementById('err-card');
-          if(err){ setError(cardEl, err, ''); }
+          if(err){
+            const dNow = digs(cardEl.value);
+            const tNow = detectCard(cardEl.value);
+            const fullNow = tNow.max || 16;
+            if (dNow.length === fullNow && luhn(cardEl.value)) { setError(cardEl, err, ''); ERROR_REGISTRY.delete('card'); renderErrorSummary(); }
+            else { clearFieldState(cardEl, err); }
+          }
+        });
+
+        cardEl.addEventListener('blur',() => {
+          const err = document.getElementById('err-card');
+          if(!err) return;
+          const d = digs(cardEl.value);
+          const t = detectCard(cardEl.value);
+          const full = t.max || 16;
+          let msg = '';
+          console.log('RESULT: ', luhn(cardEl.value));
+          if (!d) msg = 'Card number is required';
+          else if (d.length < full) msg = 'Card number incomplete';
+          else if (!luhn(cardEl.value)) msg = 'Invalid card number';
+          setError(cardEl, err, msg);
+          ERROR_REGISTRY.set('card', msg);
+          renderErrorSummary();
         });
 
         // Initial icon/state on load
@@ -602,7 +719,12 @@
         expEl.addEventListener('input',()=>{
           const digits = (expEl.value||'').replace(/\D/g,'').slice(0,4);
           expEl.value = digits.replace(/(\d{2})(\d{0,2})/, '$1/$2');
-          const err=document.getElementById('err-exp'); if(err){ setError(expEl, err, ''); }
+          const err=document.getElementById('err-exp');
+          if(err){
+            const msg = validateField('exp', expEl.value);
+            if (msg === '') { setError(expEl, err, ''); ERROR_REGISTRY.delete('exp'); renderErrorSummary(); }
+            else { clearFieldState(expEl, err); }
+          }
         });
         expEl.addEventListener('blur',()=>{
           const err=document.getElementById('err-exp');
@@ -617,7 +739,14 @@
           const need=t.cvv||3;
           const d=(cvvEl.value||'').replace(/\D/g,'');
           cvvEl.value = d.slice(0, need);
-          const err=document.getElementById('err-cvv'); if(err){ setError(cvvEl, err, ''); }
+          const err=document.getElementById('err-cvv');
+          if(err){
+            const t=detectCard(cardEl?.value||'');
+            const need=t.cvv||3;
+            const dNow=(cvvEl.value||'').replace(/\D/g,'');
+            if (dNow.length === need) { setError(cvvEl, err, ''); ERROR_REGISTRY.delete('cvv'); renderErrorSummary(); }
+            else { clearFieldState(cvvEl, err); }
+          }
         });
       }
 
@@ -626,18 +755,27 @@
         e.preventDefault();
         // quick validate + summary
         const requiredIds=['billEmail','billFirst','billLast','billCountry','billAddress1','billCity','billPostcode','billPhone','card','exp','cvv'];
-        // Require region only for US and AU
+        // Require region only for US and AU (billing)
         const billCountryVal = $('billCountry').value;
         if (billCountryVal === 'US' || billCountryVal === 'AU') {
           requiredIds.push('billRegion');
+        }
+        // If shipping section is visible, validate its fields; region required for US/AU
+        const shippingVisible = !$('shipSame').checked;
+        if (shippingVisible) {
+          requiredIds.push('shipFirst','shipLast','shipCountry','shipAddress1','shipCity','shipPostcode');
+          const shipCountryVal = $('shipCountry').value;
+          if (shipCountryVal === 'US' || shipCountryVal === 'AU') {
+            requiredIds.push('shipRegion');
+          }
         }
         ERROR_REGISTRY.clear();
         for (const id of requiredIds){ const el=$(id), err=$('err-'+id); const msg = validateField(id, el?.value||''); setError(el,err,msg); if(msg) ERROR_REGISTRY.set(id, msg); }
         renderErrorSummary();
         if (ERROR_REGISTRY.size > 0) return;
 
-        const payBtn=$('payBtn'); const spinner=$('paySpinner');
-        payBtn.disabled=true; payBtn.setAttribute('aria-busy','true'); spinner.classList.remove('hidden');
+        const payBtn=$('payBtn'); const spinner=$('paySpinner'); const lockIcon=$('payLock');
+        payBtn.disabled=true; payBtn.setAttribute('aria-busy','true'); spinner.classList.remove('hidden'); if(lockIcon){ lockIcon.classList.add('hidden'); }
 
         const token = window.location.pathname.split('/').pop();
         const selectedShip = document.querySelector('#shippingGroup input[name="shipping"]:checked');
@@ -696,9 +834,29 @@
         } catch (e) {
           showFormAlert('warning', 'An error occurred during payment processing.');
         } finally {
-          spinner.classList.add('hidden'); payBtn.disabled=false; payBtn.setAttribute('aria-busy','false');
+          spinner.classList.add('hidden'); if(lockIcon){ lockIcon.classList.remove('hidden'); } payBtn.disabled=false; payBtn.setAttribute('aria-busy','false');
         }
       });
+
+      // Footer note visibility (IntersectionObserver)
+      const payBtn = $('payBtn');
+      const note = $('footerNote');
+      if (payBtn && note) {
+        if ('IntersectionObserver' in window) {
+          const io = new IntersectionObserver((entries)=>{
+            const ent = entries[0];
+            if (ent && ent.isIntersecting) {
+              note.classList.add('visible-note'); note.classList.remove('hidden-note');
+            } else {
+              note.classList.add('hidden-note'); note.classList.remove('visible-note');
+            }
+          },{ root:null, threshold:0.1 });
+          io.observe(payBtn);
+        } else {
+          // Fallback: show note by default
+          note.classList.add('visible-note'); note.classList.remove('hidden-note');
+        }
+      }
     });
   </script>
 </body>
