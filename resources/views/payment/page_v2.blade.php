@@ -479,6 +479,76 @@
       else { labelEl.textContent='Postcode'; inputEl.placeholder='e.g., 10115'; }
     }
 
+    // --- Google Places Autocomplete helpers ---
+    function getAddressComponent(place, type, useShort=false){
+      if(!place || !Array.isArray(place.address_components)) return '';
+      const comp = place.address_components.find(c => (c.types||[]).includes(type));
+      if(!comp) return '';
+      return useShort ? (comp.short_name || comp.long_name || '') : (comp.long_name || comp.short_name || '');
+    }
+    function setSelectByText(selectEl, text){
+      if(!selectEl) return;
+      const target = String(text||'').toLowerCase();
+      let matched = false;
+      for (const opt of Array.from(selectEl.options||[])){
+        if(String(opt.textContent||'').toLowerCase() === target){ selectEl.value = opt.value || opt.textContent; matched = true; break; }
+      }
+      if(!matched){ selectEl.value = ''; }
+    }
+    function fillAddressFromPlace(prefix, place){
+      if(!place) return;
+      const country = getAddressComponent(place, 'country', true).toUpperCase();
+      // Update country select if present and different
+      const countryEl = $(prefix+'Country');
+      if (countryEl && country && countryEl.value !== country){
+        countryEl.value = country; updateCountryDependentUI(prefix);
+      }
+      // City
+      const city = getAddressComponent(place, 'locality') || getAddressComponent(place, 'administrative_area_level_2');
+      const cityEl = $(prefix+'City'); if(cityEl) cityEl.value = city;
+      // Region/state
+      const regionEl = $(prefix+'Region');
+      let regionText = '';
+      if (country === 'GB') {
+        // GB uses counties list (level_2)
+        regionText = getAddressComponent(place, 'administrative_area_level_2') || getAddressComponent(place, 'administrative_area_level_1');
+      } else {
+        regionText = getAddressComponent(place, 'administrative_area_level_1');
+        // Try short_name fallback (e.g., CA -> California) by mapping to existing option labels
+        const short = getAddressComponent(place, 'administrative_area_level_1', true);
+        if (regionEl && (!regionText || !Array.from(regionEl.options||[]).some(o=>String(o.textContent||'').toLowerCase()===String(regionText).toLowerCase()))) {
+          // If long_name not present in options, try short_name match
+          setSelectByText(regionEl, regionText);
+          if (!regionEl.value && short){ setSelectByText(regionEl, short); }
+        }
+      }
+      if (regionEl) {
+        if (!regionEl.options || regionEl.options.length === 0) updateCountryDependentUI(prefix);
+        if (regionText) setSelectByText(regionEl, regionText);
+      }
+      // ZIP / Postcode
+      const zip = getAddressComponent(place, 'postal_code');
+      const zipEl = $(prefix+'Postcode'); if(zipEl) zipEl.value = zip;
+      // Address line
+      const addrEl = $(prefix+'Address1'); if(addrEl) addrEl.value = place.formatted_address || addrEl.value;
+    }
+    function initAutocompleteFor(prefix){
+      const input = $(prefix+'Address1'); if(!input || !window.google || !google.maps || !google.maps.places) return null;
+      const countryEl = $(prefix+'Country');
+      const country = (countryEl?.value || 'US').toLowerCase();
+      const ac = new google.maps.places.Autocomplete(input, { types:['address'], fields:['address_components','formatted_address'], componentRestrictions: { country } });
+      ac.addListener('place_changed', ()=>{
+        const place = ac.getPlace();
+        if(place && place.address_components){ fillAddressFromPlace(prefix, place); }
+      });
+      return ac;
+    }
+    // Global callback for Google script
+    window.initGooglePlaces = function(){
+      try { initAutocompleteFor('bill'); } catch(_) {}
+      try { initAutocompleteFor('ship'); } catch(_) {}
+    };
+
     // Simple validation helpers
     function setValidityUI(el, isValid){
       if(!el) return;
@@ -601,6 +671,12 @@
       updateTotals(false);
       updateCountryDependentUI('bill');
       updateCountryDependentUI('ship');
+      // Initialize Google Places Autocomplete for Billing and Shipping
+      function bindAutocomplete(){
+        try { initAutocompleteFor('bill'); } catch(_) {}
+        try { initAutocompleteFor('ship'); } catch(_) {}
+      }
+      bindAutocomplete();
       // Initialize intl-tel-input for billing phone with NATIONAL formatting
       const billPhoneEl = document.getElementById('billPhone');
       const billCountryEl = document.getElementById('billCountry');
@@ -629,12 +705,14 @@
           });
         } catch (_) {}
       }
-      const cb=$('shipSame'); cb.addEventListener('change',()=>{ const show = !cb.checked; setShippingVisible(show); }); setShippingVisible(!cb.checked);
+      const cb=$('shipSame'); cb.addEventListener('change',()=>{ const show = !cb.checked; setShippingVisible(show); try { if(show) initAutocompleteFor('ship'); } catch(_) {} }); setShippingVisible(!cb.checked);
       // On billing country change: update region/select labels & phone country
       if (billCountryEl) {
         billCountryEl.addEventListener('change', ()=>{
           // Update UI (State/County label, ZIP/Postcode placeholder, region options)
           updateCountryDependentUI('bill');
+          // Re-bind autocomplete with new country restriction
+          try { initAutocompleteFor('bill'); } catch(_) {}
           // Sync phone country
           try {
             if (window.itiBilling) {
@@ -650,6 +728,8 @@
       if (shipCountryEl) {
         shipCountryEl.addEventListener('change', ()=>{
           updateCountryDependentUI('ship');
+          // Re-bind autocomplete with new country restriction
+          try { initAutocompleteFor('ship'); } catch(_) {}
         });
       }
 
@@ -859,6 +939,8 @@
       }
     });
   </script>
+  <!-- Google Maps Places (Autocomplete) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ config('services.google.maps_key') }}&libraries=places&callback=initGooglePlaces" async defer></script>
 </body>
 </html>
 

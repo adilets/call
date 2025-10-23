@@ -45,4 +45,7 @@ return [
         'token' => env('PAYEASY_TOKEN'),
     ],
 
+    'google' => [
+        'maps_key' => env('GOOGLE_MAPS_API_KEY', 'AIzaSyB42Vrzqf9qWN83vfmDV1do9HAmqmL4EzE'),
+    ]
 ];
