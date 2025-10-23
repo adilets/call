@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withSchedule(function(Schedule $schedule) {
         $schedule->command('app:update-currency-rates')->hourlyAt(5);
+        $schedule->command('app:orders-expire-by-link')->everyTenMinutes()->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         //

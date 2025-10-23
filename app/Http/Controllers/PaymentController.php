@@ -30,7 +30,12 @@ class PaymentController extends Controller
     public function show(string $token): View|\Illuminate\Http\Response {
         $link = PaymentLink::where('token', $token)->firstOrFail();
 
-        if (! $link->isValid()) {
+        if (!$link->isValid()) {
+            $order = $link->order;
+            if ($order && $order->status !== \App\Enums\OrderStatus::Paid) {
+                $order->status = \App\Enums\OrderStatus::Expired;
+                $order->save();
+            }
             return response()->view('payment.invalid', [], 410);
         }
 
@@ -138,7 +143,12 @@ class PaymentController extends Controller
     public function process(string $token, Request $request, PayEasyService $payEasyService): JsonResponse|\Illuminate\Http\Response {
         $link = PaymentLink::where('token', $token)->firstOrFail();
 
-        if (! $link->isValid()) {
+        if (!$link->isValid()) {
+            $order = $link->order;
+            if ($order && $order->status !== \App\Enums\OrderStatus::Paid) {
+                $order->status = \App\Enums\OrderStatus::Expired;
+                $order->save();
+            }
             return response()->view('payment.invalid', [], 410);
         }
 
