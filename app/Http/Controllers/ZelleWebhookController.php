@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Akaunting\Money\Currency;
+use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Services\Sms\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,6 +27,17 @@ class ZelleWebhookController extends Controller
 
         $order->status = OrderStatus::Paid;
         $order->save();
+
+        $amount = Money::USD((int) round($order->total_price * 100))
+            ->convert(new Currency($order->currency ?? 'USD'), $order->rate ?? 1)
+            ->format();
+
+        $message = "Hi, we’ve received your payment for order #OR-{$order->id} ($amount) via Zelle. Thank you for your purchase!";
+
+        app(SmsService::class)->send(
+            $order->customer->phone,
+            $message
+        );
 
         return response()->json([
             'success' => true,
