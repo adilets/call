@@ -94,6 +94,30 @@
                 </section>
             @endif
 
+            @if(($items->count() ?? 0) > 0)
+            <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
+                <h3 class="text-xl font-semibold mb-3">Items</h3>
+                <ul class="space-y-2">
+                    @foreach($items as $it)
+                        @php
+                            $qty = (int) ($it->qty ?? 1);
+                            $unitUsd = (float) ($it->unit_price ?? 0);
+                            $lineUsd = $qty * $unitUsd;
+                            $title = optional($it->product)->name ?? optional($it->product)->title ?? ($it->name ?? 'Item');
+                        @endphp
+                        <li class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="truncate text-slate-800">{{ $title }} x {{ $qty }}</div>
+                            </div>
+                            <div class="text-slate-800 font-medium whitespace-nowrap">
+                                <span class="item-line-amount" data-line-usd="{{ number_format($lineUsd, 2, '.', '') }}">{{ $currencySymbol }}{{ number_format($lineUsd * $selectedRate, 2) }}</span>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+            @endif
+
             <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
                 <h3 class="text-xl font-semibold mb-3">Shipping Method</h3>
                 <div id="shippingGroup" class="space-y-2" role="radiogroup" aria-label="Shipping Method">
@@ -298,7 +322,7 @@
                                 data-method="zelle" aria-selected="false">
                             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#7C3AED"/><path d="M8 6h8l-7 12h7" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
                             <span class="font-medium">Zelle</span>
-                            <span class="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">US only</span>
+                            <span class="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">Preferred Method</span>
                         </button>
                     </div>
 
@@ -335,8 +359,10 @@
                     <!-- ZELLE ABOUT notice (pre-order) -->
                     <div id="zelleNotice" class="hidden rounded-xl border border-purple-200 bg-purple-50 text-purple-900 p-4 mb-4">
                         <div class="flex items-start gap-2">
-                            <svg width="20" height="20" viewBox="0 0 24 24" class="mt-0.5"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".15"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                            <p class="text-sm"><span class="font-medium">Place your order first</span> then follow instructions to pay with Zelle.</p>
+                            <div class="text-sm space-y-1">
+                                <div>✅ We recommend paying with Zelle — it’s our preferred payment method for US customers.</div>
+                                <div>💬 Ready to pay? Click Pay to follow the quick Zelle payment steps.</div>
+                            </div>
                         </div>
                     </div>
 
@@ -443,6 +469,12 @@
         document.querySelectorAll('#shippingGroup [data-cost]').forEach(el=>{
             const usd = +el.getAttribute('data-cost') || 0;
             el.textContent = usd === 0 ? 'Free' : (currentSymbol + (usd * currentRate).toFixed(2));
+        });
+        // Update item line amounts when currency changes
+        document.querySelectorAll('.item-line-amount').forEach(el=>{
+            const lineUsd = parseFloat(el.getAttribute('data-line-usd')||'0');
+            const val = (lineUsd * currentRate).toFixed(2);
+            el.textContent = `${currentSymbol}${val}`;
         });
     }
     function getSelectedShippingUSD(){
@@ -905,6 +937,14 @@
         document.getElementById('pmZelleBtn')?.addEventListener('click',()=>setPayMethod('zelle'));
         setPayMethod('card');
 
+        // Show Zelle method only for US billing country
+        function updateZelleButtonVisibility(){
+            const zBtn = document.getElementById('pmZelleBtn');
+            const country = document.getElementById('billCountry')?.value;
+            if (zBtn) zBtn.classList.toggle('hidden', country !== 'US');
+        }
+        updateZelleButtonVisibility();
+
         // Currency switch
         document.querySelectorAll('#currencySwitch .curr-btn').forEach(btn=>{
             btn.addEventListener('click',()=>{
@@ -970,6 +1010,8 @@
                 } catch(_) {}
                 // If Zelle selected and not US -> switch to card
                 try { if(PAY_METHOD==='zelle' && billCountryEl.value !== 'US'){ setPayMethod('card'); } } catch(_) {}
+                // Toggle Zelle button visibility by country
+                updateZelleButtonVisibility();
             });
         }
 

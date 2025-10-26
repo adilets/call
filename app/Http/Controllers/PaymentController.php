@@ -96,7 +96,6 @@ class PaymentController extends Controller
 
         // Shipping methods at operator (user) level who created this order
         $shippingMethods = ShippingMethod::query()
-            ->where('client_id', $order->client_id)
             ->where('user_id', $order->user_id)
             ->where('enabled', true)
             ->orderBy('name')
