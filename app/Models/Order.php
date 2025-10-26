@@ -29,6 +29,7 @@ class Order extends Model
         'shipping_price',
         'status',
         'currency',
+        'pay_method',
         'notes',
         'payeasy_transaction_id',
         'payment_link',

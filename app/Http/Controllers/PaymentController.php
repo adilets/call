@@ -102,9 +102,7 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get();
 
-//        $view = request()->boolean('v2') ? 'payment.page_v2' : 'payment.page';
-
-        return view('payment.page_v2', [
+        return view('payment.checkout', [
             'order'            => $order,
             'currencies'       => $currencies,
             'selectedCurrency' => $selectedCurrency,
@@ -155,7 +153,8 @@ class PaymentController extends Controller
         $order = $link->order;
 
         // 1) Validate
-        $validated = $request->validate([
+        $payMethod = $request->input('pay_method', 'card');
+        $rules = [
             'email' => 'required|email|max:255',
             'currency' => 'nullable|in:USD,EUR',
             'shipping_method_id' => 'nullable|integer|exists:shipping_methods,id',
@@ -179,16 +178,19 @@ class PaymentController extends Controller
             'shippingState'    => 'nullable|string|max:255',
             'shippingZip'      => 'nullable|string|max:32',
             'shippingPhone'    => 'nullable|string|max:64',
-
-            'cardNumber' => 'required|string',
-            'expiry'     => 'required|string',
-            'cvc'        => 'required|string',
-
+            'pay_method' => 'nullable|in:card,zelle',
             'fl_sid'     => 'required|string',
             'frame_uuid' => 'required|string',
-        ]);
+        ];
 
-        // 2) Persist currency, rate & shipping method
+        // Card fields required only when paying by card
+        $rules['cardNumber'] = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
+        $rules['expiry']     = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
+        $rules['cvc']        = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
+
+        $validated = $request->validate($rules);
+
+        // 2) Persist currency, rate & shipping method and pay method
         if (isset($validated['currency'])) {
             $order->currency = $validated['currency'];
         }
@@ -199,6 +201,10 @@ class PaymentController extends Controller
 
         if (isset($validated['shipping_method_id'])) {
             $order->shipping_method_id = (int) $validated['shipping_method_id'];
+        }
+
+        if (!empty($validated['pay_method'])) {
+            $order->pay_method = $validated['pay_method'];
         }
 
         $order->save();
@@ -259,6 +265,7 @@ class PaymentController extends Controller
         $normalizedPhone = $billingPhone !== ''
             ? app(PhoneNormalizerService::class)->normalize($billingPhone, $validated['billingCountry'] ?? 'US')
             : null;
+
         if ($order->customer) {
             $customer = $order->customer;
             $changed = false;
@@ -315,7 +322,7 @@ class PaymentController extends Controller
         $order->status = OrderStatus::Processing;
         $order->save();
 
-        // 6) Charge
+        // 6) Charge or switch to Zelle flow
         try {
             $returnUrl = route('payment.thanks', ['token' => $token]);
 
@@ -330,6 +337,11 @@ class PaymentController extends Controller
                 'returnUrl'  => $returnUrl,
                 'email'      => $validated['email'] ?? optional($order->customer)->email,
             ]);
+
+            if ($payMethod === 'zelle') {
+                // Frontend will reveal Zelle pane and handle payment instructions
+                return response()->json($paymentResponse);
+            }
 
             // 3DS handling
             if (!empty($paymentResponse['redirectUrl']) && !empty($paymentResponse['transactionId'])) {

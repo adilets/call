@@ -80,6 +80,7 @@ class PayEasyService
             'frame_uuid' => $params['frame_uuid'],
             'fl_sid' => $params['fl_sid'],
             'ipaddress' => request()->ip(),
+            'payMethod' => $order->pay_method,
             'pp' => 'cc'
         ];
 

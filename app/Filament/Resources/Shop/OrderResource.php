@@ -372,6 +372,26 @@ class OrderResource extends Resource
                     ->sortable()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
+
+                Tables\Columns\TextColumn::make('pay_method')
+                    ->label('Pay Method')
+                    ->getStateUsing(fn ($record) => $record->pay_method)
+                    ->html()
+                    ->formatStateUsing(function ($state) {
+                        if (!$state) {
+                            return '—';
+                        }
+                        $s = strtolower($state);
+                        if ($s === 'zelle') {
+                            return '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium" style="background-color:#f3e8ff;color:#6d28d9;border:1px solid #e9d5ff;outline:1px solid transparent;">Zelle</span>';
+                        }
+                        if ($s === 'card') {
+                            return '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium" style="background-color:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;outline:1px solid transparent;">Card</span>';
+                        }
+                        return '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium" style="background-color:#f3f4f6;color:#111827;border:1px solid #e5e7eb;outline:1px solid transparent;">' . e(Str::headline($state)) . '</span>';
+                    })
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('total_price')->searchable()->sortable()->money()->summarize([
                     Tables\Columns\Summarizers\Sum::make()->money(),
                 ]),
