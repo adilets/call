@@ -360,8 +360,8 @@
                     <div id="zelleNotice" class="hidden rounded-xl border border-purple-200 bg-purple-50 text-purple-900 p-4 mb-4">
                         <div class="flex items-start gap-2">
                             <div class="text-sm space-y-1">
-                                <div>✅ We recommend paying with Zelle — it’s our preferred payment method for US customers.</div>
-                                <div>💬 Ready to pay? Click Pay to follow the quick Zelle payment steps.</div>
+                                <div>✅ <b>We recommend paying with Zelle</b> — it’s our preferred payment method for US customers.</div>
+                                <div>💬 Ready to pay? <b>Click Pay</b> to follow the quick Zelle payment steps.</div>
                             </div>
                         </div>
                     </div>
@@ -464,6 +464,34 @@
     const $ = (id)=>document.getElementById(id);
     const fmt = (v,c)=> c==='EUR' ? `€${v.toFixed(2)}` : `$${v.toFixed(2)}`;
     function announce(msg){ const r=$('liveRegion'); if(!r) return; r.textContent=''; setTimeout(()=>r.textContent=msg,10); }
+    // Visible toast helper for quick user feedback
+    let __toastTimer = null;
+    function showToast(message){
+        let t = document.getElementById('toast');
+        if(!t){
+            t = document.createElement('div');
+            t.id = 'toast';
+            t.setAttribute('role','status');
+            t.style.position = 'fixed';
+            t.style.left = '50%';
+            t.style.bottom = '20px';
+            t.style.transform = 'translateX(-50%)';
+            t.style.background = '#111827';
+            t.style.color = '#fff';
+            t.style.padding = '8px 12px';
+            t.style.borderRadius = '10px';
+            t.style.fontSize = '12px';
+            t.style.boxShadow = '0 6px 18px rgba(0,0,0,.25)';
+            t.style.opacity = '0';
+            t.style.transition = 'opacity .18s ease';
+            t.style.zIndex = '9999';
+            document.body.appendChild(t);
+        }
+        t.textContent = String(message||'');
+        t.style.opacity = '1';
+        if(__toastTimer) clearTimeout(__toastTimer);
+        __toastTimer = setTimeout(()=>{ t.style.opacity = '0'; }, 1500);
+    }
 
     function updateShippingBadges(){
         document.querySelectorAll('#shippingGroup [data-cost]').forEach(el=>{
@@ -1122,8 +1150,41 @@
             });
         }
 
-        // Copy buttons (Zelle)
-        (function(){ document.querySelectorAll('.copy-btn').forEach(btn=>{ btn.addEventListener('click', async ()=>{ const sel=btn.getAttribute('data-copy'); const el=sel && document.querySelector(sel); if(!el) return; await navigator.clipboard.writeText(el.value||el.textContent||''); }); }); })();
+        // Copy buttons (Zelle) with fallback for non-secure contexts
+        async function copyToClipboard(text){
+            try {
+                if (navigator && navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text || '');
+                    return true;
+                }
+            } catch (_) {}
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = String(text || '');
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                ta.style.pointerEvents = 'none';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand && document.execCommand('copy');
+                document.body.removeChild(ta);
+                return !!ok;
+            } catch (_) { return false; }
+        }
+        (function(){
+            document.querySelectorAll('.copy-btn').forEach(btn=>{
+                btn.addEventListener('click', async ()=>{
+                    const sel = btn.getAttribute('data-copy');
+                    const el = sel && document.querySelector(sel);
+                    if(!el) return;
+                    const text = (el.value ?? el.textContent ?? '').toString();
+                    const ok = await copyToClipboard(text);
+                    try { announce(ok ? 'Copied to clipboard.' : 'Copy failed.'); } catch(_) {}
+                    try { showToast(ok ? 'Copied to clipboard' : 'Copy failed'); } catch(_) {}
+                });
+            });
+        })();
 
         // Submit handler
         $('checkoutForm').addEventListener('submit', async (e)=>{
