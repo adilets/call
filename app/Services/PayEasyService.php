@@ -81,6 +81,7 @@ class PayEasyService
             'fl_sid' => $params['fl_sid'],
             'ipaddress' => request()->ip(),
             'payMethod' => $order->pay_method,
+            'returnUrl' => $params['returnUrl'],
             'pp' => 'cc'
         ];
 
