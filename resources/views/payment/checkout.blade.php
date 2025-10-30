@@ -195,14 +195,19 @@
                         </div>
                     </div>
 
+                    @php
+                        $countryKeys = array_keys($countries ?? []);
+                        $firstAllowed = $countryKeys[0] ?? 'US';
+                        $currentBillCountry = in_array(($billing?->country ?? ''), $countryKeys, true)
+                            ? ($billing?->country)
+                            : $firstAllowed;
+                    @endphp
                     <div class="mb-4">
                         <label for="billCountry" class="block text-sm font-medium text-slate-700">Country <span class="text-red-600">*</span></label>
                         <select id="billCountry" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" required>
-                            <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
-                            <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
-                            <option value="AU" {{ (($billing?->country ?? 'US') === 'AU') ? 'selected' : '' }}>Australia</option>
-                            <option value="FR" {{ (($billing?->country ?? 'US') === 'FR') ? 'selected' : '' }}>France</option>
-                            <option value="DE" {{ (($billing?->country ?? 'US') === 'DE') ? 'selected' : '' }}>Germany</option>
+                            @foreach(($countries ?? []) as $code => $name)
+                                <option value="{{ $code }}" {{ $code === $currentBillCountry ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
                         </select>
                         <p id="err-billCountry" class="hidden text-sm text-red-600"></p>
                     </div>
@@ -265,14 +270,13 @@
                         </div>
                     </div>
 
+                    @php $currentShipCountry = $currentBillCountry; @endphp
                     <div class="mb-4">
                         <label for="shipCountry" class="block text-sm font-medium text-slate-700">Country <span class="text-red-600">*</span></label>
                         <select id="shipCountry" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2">
-                            <option value="US" {{ (($billing?->country ?? 'US') === 'US') ? 'selected' : '' }}>United States</option>
-                            <option value="GB" {{ (($billing?->country ?? 'US') === 'GB') ? 'selected' : '' }}>United Kingdom</option>
-                            <option value="AU" {{ (($billing?->country ?? 'US') === 'AU') ? 'selected' : '' }}>Australia</option>
-                            <option value="FR" {{ (($billing?->country ?? 'US') === 'FR') ? 'selected' : '' }}>France</option>
-                            <option value="DE" {{ (($billing?->country ?? 'US') === 'DE') ? 'selected' : '' }}>Germany</option>
+                            @foreach(($countries ?? []) as $code => $name)
+                                <option value="{{ $code }}" {{ $code === $currentShipCountry ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
                         </select>
                         <p id="err-shipCountry" class="hidden text-sm text-red-600"></p>
                     </div>
@@ -309,14 +313,24 @@
                         <span class="text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-0.5">Choose a method</span>
                     </h2>
 
+                    @php
+                        $allowedPayMethods = $allowedPayMethods ?? ['card','zelle'];
+                        $allowCard = in_array('card', $allowedPayMethods, true);
+                        $allowZelle = in_array('zelle', $allowedPayMethods, true);
+                        $defaultPayMethod = $allowCard ? 'card' : ($allowZelle ? 'zelle' : 'card');
+                    @endphp
+
                     <!-- Payment method toggle -->
                     <div class="mb-4 grid grid-cols-2 gap-2" role="tablist" aria-label="Payment method">
+                        @if($allowCard)
                         <button id="pmCardBtn" type="button" role="tab"
                                 class="pm-btn flex items-center justify-center gap-2 rounded-lg border border-blue-600 bg-blue-600 text-white py-2.5"
                                 data-method="card" aria-selected="true">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="18" height="3" fill="currentColor"/></svg>
                             <span class="font-medium">Card (Visa / MC)</span>
                         </button>
+                        @endif
+                        @if($allowZelle)
                         <button id="pmZelleBtn" type="button" role="tab"
                                 class="pm-btn flex items-center justify-center gap-2 rounded-lg border border-purple-600/40 text-purple-700 py-2.5"
                                 data-method="zelle" aria-selected="false">
@@ -324,6 +338,7 @@
                             <span class="font-medium">Zelle</span>
                             <span class="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">Preferred Method</span>
                         </button>
+                        @endif
                     </div>
 
                     <!-- CARD pane -->
@@ -356,6 +371,7 @@
                         </div>
                     </div>
 
+                    @if($allowZelle)
                     <!-- ZELLE ABOUT notice (pre-order) -->
                     <div id="zelleNotice" class="hidden rounded-xl border border-purple-200 bg-purple-50 text-purple-900 p-4 mb-4">
                         <div class="flex items-start gap-2">
@@ -414,6 +430,7 @@
                             </div>
                         </div>
                     </div>
+                    @endif
 
                     <input type="hidden" name="frame_uuid" id="frame_uuid" value="" />
                     <input type="hidden" name="fl_sid" id="fl_sid" value="" />
@@ -529,7 +546,7 @@
     }
 
     // ---- Zelle: simple helpers/state ----
-    let PAY_METHOD = 'card';
+    let PAY_METHOD = @json($defaultPayMethod);
     let ZELLE_ORDER_PLACED = false;
     let zelleTimerInt = null;
     let zelleDeadlineMs = null;
@@ -963,7 +980,7 @@
         }
         document.getElementById('pmCardBtn')?.addEventListener('click',()=>setPayMethod('card'));
         document.getElementById('pmZelleBtn')?.addEventListener('click',()=>setPayMethod('zelle'));
-        setPayMethod('card');
+        setPayMethod(PAY_METHOD);
 
         // Show Zelle method only for US billing country
         function updateZelleButtonVisibility(){

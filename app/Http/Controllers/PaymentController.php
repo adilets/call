@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Illuminate\Validation\Rule;
 use PragmaRX\Countries\Package\Countries;
 
 class PaymentController extends Controller
@@ -81,11 +82,24 @@ class PaymentController extends Controller
 
         $flagByCode = [ 'USD' => 'us', 'EUR' => 'eu' ];
 
-        // Countries list: United States and United Kingdom
-        $countries = [
+        // Countries allowed per client (fallback to common set)
+        $allowedCountryCodes = is_array(optional($order->client)->countries) ? array_values(array_unique(array_filter($order->client->countries))) : [];
+        if (empty($allowedCountryCodes)) {
+            $allowedCountryCodes = ['US','GB','AU','FR','DE'];
+        }
+        $allCountryNames = [
             'US' => 'United States',
             'GB' => 'United Kingdom',
+            'AU' => 'Australia',
+            'FR' => 'France',
+            'DE' => 'Germany',
         ];
+        $countries = [];
+        foreach ($allowedCountryCodes as $cc) {
+            if (isset($allCountryNames[$cc])) {
+                $countries[$cc] = $allCountryNames[$cc];
+            }
+        }
 
         // Region lists
         $states = config('geo.us_states');
@@ -101,6 +115,16 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Allowed payment methods by client (fallback to both)
+        $allowedPayMethods = optional($order->client)
+            ?->paymentMethods()
+            ->orderBy('sort_order')
+            ->pluck('code')
+            ->all() ?? [];
+        if (empty($allowedPayMethods)) {
+            $allowedPayMethods = ['card', 'zelle'];
+        }
+
         return view('payment.checkout', [
             'order'            => $order,
             'currencies'       => $currencies,
@@ -114,6 +138,7 @@ class PaymentController extends Controller
             'auStates'         => $auStates,
             'deStates'         => $deStates,
             'frRegions'        => $frRegions,
+            'allowedPayMethods'=> $allowedPayMethods,
         ]);
     }
 
@@ -153,6 +178,15 @@ class PaymentController extends Controller
 
         // 1) Validate
         $payMethod = $request->input('pay_method', 'card');
+
+        // Determine allowed methods for this client (fallback to both)
+        $allowedCodes = optional($order->client)
+            ?->paymentMethods()
+            ->pluck('code')
+            ->all() ?? [];
+        if (empty($allowedCodes)) {
+            $allowedCodes = ['card', 'zelle'];
+        }
         $rules = [
             'email' => 'required|email|max:255',
             'currency' => 'nullable|in:USD,EUR',
@@ -177,7 +211,7 @@ class PaymentController extends Controller
             'shippingState'    => 'nullable|string|max:255',
             'shippingZip'      => 'nullable|string|max:32',
             'shippingPhone'    => 'nullable|string|max:64',
-            'pay_method' => 'nullable|in:card,zelle',
+            'pay_method' => ['nullable', Rule::in($allowedCodes)],
             'fl_sid'     => 'required|string',
             'frame_uuid' => 'required|string',
         ];
@@ -186,6 +220,15 @@ class PaymentController extends Controller
         $rules['cardNumber'] = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
         $rules['expiry']     = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
         $rules['cvc']        = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
+
+        // Constrain countries to client's allowed list
+        $allowedCountryCodes = is_array(optional($order->client)->countries) ? array_values(array_unique(array_filter($order->client->countries))) : [];
+        if (empty($allowedCountryCodes)) {
+            $allowedCountryCodes = ['US','GB','AU','FR','DE'];
+        }
+
+        $rules['billingCountry'] = ['required','string','max:3', Rule::in($allowedCountryCodes)];
+        $rules['shippingCountry'] = ['nullable','string','max:3', Rule::in($allowedCountryCodes)];
 
         $validated = $request->validate($rules);
 

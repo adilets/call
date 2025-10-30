@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Administration;
 use App\Filament\Resources\Administration;
 use App\Models\Client;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
@@ -55,6 +56,27 @@ class ClientResource extends Resource
                             ->helperText('Select allowed checkout currencies (USD/EUR).')
                             ->preload()
                             ->searchable(),
+
+                        Select::make('countries')
+                            ->label('Countries')
+                            ->multiple()
+                            ->options([
+                                'US' => 'United States',
+                                'GB' => 'United Kingdom',
+                                'AU' => 'Australia',
+                                'FR' => 'France',
+                                'DE' => 'Germany',
+                            ])
+                            ->helperText('Choose which countries to show in checkout (billing/shipping).')
+                            ->preload()
+                            ->searchable(),
+
+                        Select::make('paymentMethods')
+                            ->label('Payment Methods')
+                            ->multiple()
+                            ->relationship('paymentMethods', 'name')
+                            ->preload()
+                            ->helperText('Enable/disable checkout payment methods for this client.'),
                     ])
                     ->columns(2),
             ]);
