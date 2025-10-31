@@ -194,7 +194,6 @@ class PaymentController extends Controller
 
             'billingFirstname'  => 'required|string|max:255',
             'billingLastname'  => 'nullable|string|max:255',
-            'billingCountry'   => 'required|string|max:3',
             'billingAddress'   => 'required|string|max:255',
             'billingCity'      => 'nullable|string|max:255',
             'billingState'     => 'nullable|string|max:255',
@@ -205,15 +204,12 @@ class PaymentController extends Controller
 
             'shippingFirstname' => 'nullable|string|max:255',
             'shippingLastname' => 'nullable|string|max:255',
-            'shippingCountry'  => 'nullable|string|max:3',
             'shippingAddress'  => 'nullable|string|max:255',
             'shippingCity'     => 'nullable|string|max:255',
             'shippingState'    => 'nullable|string|max:255',
             'shippingZip'      => 'nullable|string|max:32',
             'shippingPhone'    => 'nullable|string|max:64',
-            'pay_method' => ['nullable', Rule::in($allowedCodes)],
-            'fl_sid'     => 'required|string',
-            'frame_uuid' => 'required|string',
+            'pay_method' => ['nullable', Rule::in($allowedCodes)]
         ];
 
         // Card fields required only when paying by card
@@ -374,8 +370,6 @@ class PaymentController extends Controller
                 'lastname'   => $validated['billingLastname'] ?? null,
                 'expiry'     => $validated['expiry'],
                 'cvc'        => $validated['cvc'],
-                'fl_sid'     => $validated['fl_sid'],
-                'frame_uuid' => $validated['frame_uuid'],
                 'returnUrl'  => $returnUrl,
                 'email'      => $validated['email'] ?? optional($order->customer)->email,
             ]);

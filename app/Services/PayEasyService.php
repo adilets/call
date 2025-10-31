@@ -77,8 +77,6 @@ class PayEasyService
             'country' => optional($order->address)->country,
             'phone' => optional($order->customer)->phone,
             'number' => $order->number,
-            'frame_uuid' => $params['frame_uuid'],
-            'fl_sid' => $params['fl_sid'],
             'ipaddress' => request()->ip(),
             'payMethod' => $order->pay_method,
             'returnUrl' => $params['returnUrl'],

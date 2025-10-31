@@ -431,10 +431,6 @@
                         </div>
                     </div>
                     @endif
-
-                    <input type="hidden" name="frame_uuid" id="frame_uuid" value="" />
-                    <input type="hidden" name="fl_sid" id="fl_sid" value="" />
-
                     <button id="payBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-3 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" aria-live="polite" aria-busy="false">
                         <svg id="paySpinner" class="hidden h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"></circle>
@@ -611,9 +607,7 @@
             if (respEmail) email.value = respEmail; else if (!(email.value||'').trim()) email.value = ZELLE_CONFIG.zelleEmail;
         }
         if(amount) amount.value = `$${(USD_SUBTOTAL + getSelectedShippingUSD()).toFixed(2)}`;
-        if(memo){
-            if (respMemo) memo.value = respMemo; else if (!(memo.value||'').trim()) memo.value = (document.getElementById('frame_uuid')?.value)||'';
-        }
+        if(memo) memo.value = respMemo || '';
         if(recip){
             if (respRecip) recip.value = respRecip; else if (!(recip.value||'').trim()) recip.value = ZELLE_CONFIG.merchantLegal;
         }
@@ -893,22 +887,6 @@
             default: return '';
         }
     }
-
-    // Scoring script (copied from v1)
-    (function(){
-        const opts={clientId:'bf15fe',endpoint:'https://webanalytic.app',fieldId:'frame_uuid',sidFieldId:'fl_sid',cookieName:'fbl_cookie_id',years:100};
-        const uuid=()=>crypto.randomUUID?.()||'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=crypto.getRandomValues(new Uint8Array(1))[0]&15;return (c==='x'?r:(r&0x3|0x8)).toString(16)});
-        const getCookie=n=>('; '+document.cookie).split(`; ${n}=`).pop().split(';')[0]||null;
-        const setCookie=v=>{const d=new Date(); d.setFullYear(d.getFullYear()+opts.years); document.cookie=`${opts.cookieName}=${v}; Path=/; Expires=${d.toUTCString()}; SameSite=None; Secure`; return v;};
-        const sid=getCookie(opts.cookieName)||setCookie(uuid()+':'+Date.now()); const id=uuid();
-        document.getElementById(opts.fieldId)?.setAttribute('value', id);
-        document.getElementById(opts.sidFieldId)?.setAttribute('value', sid);
-        const ud=[screen.width,screen.height,screen.colorDepth,devicePixelRatio,new Date().getTimezoneOffset(),navigator.platform,new Date().toISOString()];
-        try{ud.push(Intl.DateTimeFormat().resolvedOptions().timeZone)}catch{ud.push('-')}
-        const url=`${opts.endpoint}/transactions/${opts.clientId}/${id}?cid=${sid}&uv1=${encodeURIComponent(JSON.stringify(ud))}`;
-        const iframe=Object.assign(document.createElement('iframe'),{src:url,width:0,height:0,style:'border:0',referrerPolicy:'no-referrer'});
-        document.body.appendChild(iframe);
-    })();
 
     // Card helpers (detect & format)
     const CARD_TYPES=[{key:'amex',name:'American Express',re:/^3[47]/,gaps:[4,10],max:15,cvv:4},{key:'visa',name:'Visa',re:/^4/,gaps:[4,8,12],max:16,cvv:3},{key:'mc',name:'MasterCard',re:/^(5[1-5]|2[2-7])/,gaps:[4,8,12],max:16,cvv:3},{key:'disc',name:'Discover',re:/^(6011|65|64[4-9])/,gaps:[4,8,12],max:16,cvv:3}];
@@ -1267,8 +1245,6 @@
                 cardNumber: PAY_METHOD==='card' ? $('card').value : null,
                 expiry:     PAY_METHOD==='card' ? $('exp').value  : null,
                 cvc:        PAY_METHOD==='card' ? $('cvv').value  : null,
-                fl_sid: $('fl_sid')?.value,
-                frame_uuid: $('frame_uuid')?.value,
                 pay_method: PAY_METHOD,
             };
 
