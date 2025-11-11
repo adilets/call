@@ -4,6 +4,7 @@ use App\Http\Controllers\CardWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ZelleWebhookController;
+use App\Http\Controllers\AirwallexWebhookController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -13,3 +14,4 @@ Route::get('/user', function (Request $request) {
 Route::post('/webhooks/zelle', ZelleWebhookController::class);
 
 Route::post('/webhooks/card', CardWebhookController::class);
+Route::post('/webhooks/airwallex', AirwallexWebhookController::class);

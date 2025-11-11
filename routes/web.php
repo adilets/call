@@ -26,4 +26,6 @@ Route::domain(env('DOMAIN_PAYMENT', 'getsecurepay.net'))->group(function () {
 
     Route::post('/pay/{token}/process', [PaymentController::class, 'process'])
         ->name('payment.process');
+
+    Route::get('/pay/{token}/airwallex', [\App\Http\Controllers\PaymentController::class, 'airwallex'])->name('payment.airwallex');
 });

@@ -11,10 +11,16 @@
             </svg>
         </div>
         <h2 class="fw-bold">Thank You!</h2>
-        <p class="mt-3">
-            Your payment has been successfully processed.
-            An email confirmation has been sent to you.
-        </p>
+        @if(request()->query('pm') === 'airwallex')
+            <p class="mt-3">
+                Your payment confirmation has been received and is now being processed.
+            </p>
+        @else
+            <p class="mt-3">
+                Your payment has been successfully processed.
+                An email confirmation has been sent to you.
+            </p>
+        @endif
     </div>
 
     </body>

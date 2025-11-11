@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="{{ asset('images/favicon2.png') }}" />
     <title>Checkout</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,6 +16,15 @@
     <style>
         .iti{width:100%}
         .iti__tel-input{width:100%}
+        /* Payment rows styling */
+        .pm-row{border:1px solid rgba(15,23,42,.08);border-radius:14px;background:#fff;transition:.22s ease;cursor:pointer}
+        .pm-row:hover{box-shadow:0 6px 18px -8px rgba(2,6,23,.18)}
+        .pm-row[aria-checked="true"]{border-color:rgba(59,130,246,.45);box-shadow:0 0 0 4px rgba(59,130,246,.12)}
+        .pm-content{max-height:0;opacity:0;overflow:hidden;transform:translateY(-6px);
+            transition:max-height .28s ease,opacity .18s ease,transform .28s ease,padding .28s ease;
+            padding:0 1rem 0 1rem}
+        .pm-content.open{max-height:1200px;opacity:1;transform:translateY(0);padding:0 1rem 1rem 1rem}
+        .brand-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:12px;border-radius:999px;padding:.15rem .5rem}
         /* Enlarge phone dropdown search input */
         .iti__search-input{
             height: 44px;
@@ -314,124 +324,151 @@
                     </h2>
 
                     @php
-                        $allowedPayMethods = $allowedPayMethods ?? ['card','zelle'];
+                        $allowedPayMethods = $allowedPayMethods ?? ['card','zelle','airwallex'];
                         $allowCard = in_array('card', $allowedPayMethods, true);
                         $allowZelle = in_array('zelle', $allowedPayMethods, true);
-                        $defaultPayMethod = $allowCard ? 'card' : ($allowZelle ? 'zelle' : 'card');
+                        $allowSepa = in_array('airwallex', $allowedPayMethods, true);
+                        $defaultPayMethod = $allowCard ? 'card' : ($allowZelle ? 'zelle' : ($allowSepa ? 'airwallex' : 'card'));
                     @endphp
 
-                    <!-- Payment method toggle -->
-                    <div class="mb-4 grid grid-cols-2 gap-2" role="tablist" aria-label="Payment method">
+                    <!-- Payment rows (accordion) -->
+                    <div class="space-y-3" role="radiogroup" aria-label="Payment method">
                         @if($allowCard)
-                        <button id="pmCardBtn" type="button" role="tab"
-                                class="pm-btn flex items-center justify-center gap-2 rounded-lg border border-blue-600 bg-blue-600 text-white py-2.5"
-                                data-method="card" aria-selected="true">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="18" height="3" fill="currentColor"/></svg>
-                            <span class="font-medium">Card (Visa / MC)</span>
-                        </button>
+                        <div id="row-card" class="pm-row" role="radio" aria-checked="false" data-method="card" tabindex="0">
+                            <div class="flex items-center gap-3 p-4">
+                                <input type="radio" name="pm" value="card" class="h-4 w-4 text-blue-600">
+                                <div class="font-medium text-slate-800 flex items-center gap-2">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="#0f172a" stroke-width="1.6"/><rect x="3" y="9" width="18" height="3" fill="#0f172a"/></svg>
+                                    Card (Visa / MC)
+                                </div>
+                            </div>
+                            <div class="pm-content" id="row-card-content">
+                                <div id="cardPane" class="mb-5">
+                                    <label for="card" class="block text-sm font-medium text-slate-700">Card Number <span class="text-red-600">*</span></label>
+                                    <div class="mt-1 flex items-center gap-2">
+                                        <div class="relative flex items-center gap-2 w-full rounded-md border border-slate-300 px-2 focus-within:border-blue-400 transition">
+                                            <div id="cardIconWrap" class="relative w-10 h-8 overflow-hidden"><div id="cardIcon" class="absolute inset-0"></div></div>
+                                            <input id="card" inputmode="numeric" autocomplete="cc-number" aria-describedby="err-card" class="w-full py-2 outline-none pr-24" placeholder="1234 5678 9012 3456" required />
+                                            <div class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2" aria-hidden="true">
+                                                <svg viewBox="0 0 48 32" width="38" height="24" role="img" aria-label="Visa" focusable="false"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E6E9EE"/><text x="10" y="20" fill="#1A1F71" font-size="14" font-weight="700">VISA</text></svg>
+                                                <svg viewBox="0 0 48 32" width="38" height="24" role="img" aria-label="Mastercard" focusable="false"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E6E9EE"/><circle cx="20" cy="16" r="7" fill="#EB001B"></circle><circle cx="28" cy="16" r="7" fill="#F79E1B"></circle></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="mt-1 text-sm text-slate-500" id="cardTypeLabel">Unknown</p>
+                                    <p id="err-card" class="hidden text-sm text-red-600"></p>
+                                </div>
+
+                                <div id="cardDetails" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <label for="exp" class="block text-sm font-medium text-slate-700">Exp (MM/YY) <span class="text-red-600">*</span></label>
+                                        <input id="exp" inputmode="numeric" autocomplete="cc-exp" aria-describedby="err-exp" class="with-exp-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="MM/YY" required />
+                                        <p id="err-exp" class="hidden text-sm text-red-600"></p>
+                                    </div>
+                                    <div>
+                                        <label for="cvv" class="block text-sm font-medium text-slate-700">CVV <span class="text-red-600">*</span></label>
+                                        <input id="cvv" inputmode="numeric" autocomplete="cc-csc" aria-describedby="err-cvv" class="with-cvv-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="123" required />
+                                        <p id="err-cvv" class="hidden text-sm text-red-600"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+                        @if($allowSepa)
+                        <div id="row-airwallex" class="pm-row" role="radio" aria-checked="false" data-method="airwallex" tabindex="-1">
+                            <div class="flex items-center gap-3 p-4">
+                                <input type="radio" name="pm" value="airwallex" class="h-4 w-4 text-teal-600">
+                                <div class="font-medium text-slate-800 flex items-center gap-2">
+                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 9h16M5 9l7-5 7 5M6 11v7m4-7v7m4-7v7m4-7v7M4 18h16" stroke="#2563EB" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+                                    <div>
+                                        <p>Local Payment (EU / UK / AU / US / CA)</p>
+                                        <p class="text-[13px] text-slate-500 leading-5">Pay easily via SEPA, ACH, FPS, Interac or local bank transfer.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pm-content" id="row-airwallex-content">
+                                <div id="airwallexNotice" class="hidden rounded-xl border border-teal-200 bg-teal-50 text-teal-900 p-4 mb-4">
+                                    <div class="font-medium mb-1">How it works:</div>
+                                    <ol class="list-decimal ml-5 text-sm space-y-1">
+                                        <li>Click <b>Place order</b> to generate your payment reference.</li>
+                                        <li>Send a <b>SEPA transfer</b> using the bank details shown next.</li>
+                                        <li>Once the transfer is complete, click <b>I HAVE PAID</b> to speed up verification.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
                         @endif
                         @if($allowZelle)
-                        <button id="pmZelleBtn" type="button" role="tab"
-                                class="pm-btn flex items-center justify-center gap-2 rounded-lg border border-purple-600/40 text-purple-700 py-2.5"
-                                data-method="zelle" aria-selected="false">
-                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#7C3AED"/><path d="M8 6h8l-7 12h7" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
-                            <span class="font-medium">Zelle</span>
-                            <span class="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">Preferred Method</span>
-                        </button>
+                        <div id="row-zelle" class="pm-row" role="radio" aria-checked="false" data-method="zelle" tabindex="-1">
+                            <div class="flex items-center gap-3 p-4">
+                                <input type="radio" name="pm" value="zelle" class="h-4 w-4 text-purple-600">
+                                <div class="font-medium text-slate-800 flex items-center gap-2">
+                                    <svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="#7C3AED"/><path d="M9 6h7l-6 12h6" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+                                    Zelle <span class="brand-badge ml-2" style="background:#f3e8ff;color:#7C3AED;border:1px solid #e9d5ff">US only</span>
+                                </div>
+                            </div>
+                            <div class="pm-content" id="row-zelle-content">
+                                <div id="zelleNotice" class="hidden rounded-xl border border-purple-200 bg-purple-50 text-purple-900 p-4 mb-4">
+                                    <div class="flex items-start gap-2">
+                                        <div class="text-sm space-y-1">
+                                            <div>✅ <b>We recommend paying with Zelle</b> — it's our preferred payment method for US customers.</div>
+                                            <div>💬 Ready to pay? <b>Click Pay</b> to follow the quick Zelle payment steps.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="zellePane" class="hidden mt-4">
+                                    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                        <div class="flex items-center gap-3 border-b border-slate-200 p-4">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#7C3AED"/><path d="M8 6h8l-7 12h7" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+                                            <div class="text-slate-800 font-semibold">Pay with Zelle®</div>
+                                            <div class="ml-auto text-xs text-slate-500">USD only</div>
+                                        </div>
+                                        <div class="p-4 sm:p-6 space-y-4">
+                                            <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
+                                                <div class="text-sm text-slate-600 sm:text-right">RECIPIENT</div>
+                                                <div class="flex items-center gap-2"><input id="zelleRecipient" class="w-full rounded-md border border-slate-300 px-3 py-2" value="MYPILLS ORG LLC" readonly></div>
+                                                <button type="button" data-copy="#zelleRecipient" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
+                                            </div>
+                                            <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
+                                                <div class="text-sm text-slate-600 sm:text-right">E-MAIL</div>
+                                                <div class="flex items-center gap-2"><input id="zelleEmail" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
+                                                <button type="button" data-copy="#zelleEmail" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
+                                            </div>
+                                            <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
+                                                <div class="text-sm text-slate-600 sm:text-right">AMOUNT</div>
+                                                <div class="flex items-center gap-2"><input id="zelleAmount" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
+                                                <button type="button" data-copy="#zelleAmount" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
+                                            </div>
+                                            <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
+                                                <div class="text-sm text-slate-600 sm:text-right">MEMO</div>
+                                                <div class="flex items-center gap-2"><input id="zelleMemo" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
+                                                <button type="button" data-copy="#zelleMemo" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
+                                            </div>
+                                            <div class="pt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                                                <div class="flex items-center gap-2 text-purple-700">
+                                                    <svg id="zelleClockIcon" width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                                                    <span id="zelleTimer" class="text-xl font-semibold tabular-nums">00:15:00</span>
+                                                    <span id="zelleStatus" class="text-xs text-slate-500" aria-live="polite">awaiting payment</span>
+                                                </div>
+                                                <button id="zellePaidBtn" type="button" class="rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-medium px-5 py-2.5">I HAVE PAID</button>
+                                            </div>
+                                            <div class="pt-1 text-xs text-slate-500">Need more time? <button id="extendHold" type="button" class="underline">Extend hold by 10 minutes</button></div>
+                                            <div class="mt-3 rounded-lg border border-purple-200 bg-purple-50 px-5 py-4 text-sm leading-relaxed text-slate-700">
+                                                <div class="flex items-center mb-3"><span class="text-purple-600 text-lg mr-2">💬</span><span class="font-semibold text-slate-800">Zelle Payment Instructions</span></div>
+                                                <div class="flex items-start mb-2"><span class="text-purple-500 text-base mr-2 mt-[2px]">🧾</span><p>Please enter <span class="font-semibold">only your order number</span> in the Comments or Notes field when sending your Zelle payment.</p></div>
+                                                <div class="flex items-start mb-2"><span class="text-yellow-500 text-base mr-2 mt-[2px]">⚠️</span><p><span class="font-semibold">IMPORTANT:</span> Do not include website name, product names, or any other details — this may cause your Zelle transaction to be declined.</p></div>
+                                                <div class="flex items-start"><span class="text-green-500 text-base mr-2 mt-[2px]">✅</span><p>For automatic matching, the <span class="font-semibold">amount</span> and <span class="font-semibold">sender's full name</span> must exactly match your order details.</p></div>
+                                            </div>
+                                            <div class="pt-2 text-xs">Prefer a different method? <button type="button" id="switchToCard" class="underline">Pay by card instead</button></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         @endif
                     </div>
 
-                    <!-- CARD pane -->
-                    <div id="cardPane" class="mb-5">
-                        <label for="card" class="block text-sm font-medium text-slate-700">Card Number <span class="text-red-600">*</span></label>
-                        <div class="mt-1 flex items-center gap-2">
-                            <div class="relative flex items-center gap-2 w-full rounded-md border border-slate-300 px-2 focus-within:border-blue-400 transition">
-                                <div id="cardIconWrap" class="relative w-10 h-8 overflow-hidden"><div id="cardIcon" class="absolute inset-0"></div></div>
-                                <input id="card" inputmode="numeric" autocomplete="cc-number" aria-describedby="err-card" class="w-full py-2 outline-none pr-24" placeholder="1234 5678 9012 3456" required />
-                                <div class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2" aria-hidden="true">
-                                    <svg viewBox="0 0 48 32" width="38" height="24" role="img" aria-label="Visa" focusable="false"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E6E9EE"/><text x="10" y="20" fill="#1A1F71" font-size="14" font-weight="700">VISA</text></svg>
-                                    <svg viewBox="0 0 48 32" width="38" height="24" role="img" aria-label="Mastercard" focusable="false"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E6E9EE"/><circle cx="20" cy="16" r="7" fill="#EB001B"></circle><circle cx="28" cy="16" r="7" fill="#F79E1B"></circle></svg>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="mt-1 text-sm text-slate-500" id="cardTypeLabel">Unknown</p>
-                        <p id="err-card" class="hidden text-sm text-red-600"></p>
-                    </div>
-
-                    <div id="cardDetails" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label for="exp" class="block text-sm font-medium text-slate-700">Exp (MM/YY) <span class="text-red-600">*</span></label>
-                            <input id="exp" inputmode="numeric" autocomplete="cc-exp" aria-describedby="err-exp" class="with-exp-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="MM/YY" required />
-                            <p id="err-exp" class="hidden text-sm text-red-600"></p>
-                        </div>
-                        <div>
-                            <label for="cvv" class="block text-sm font-medium text-slate-700">CVV <span class="text-red-600">*</span></label>
-                            <input id="cvv" inputmode="numeric" autocomplete="cc-csc" aria-describedby="err-cvv" class="with-cvv-icon mt-1 w-full rounded-md border border-slate-300 px-3 py-2" placeholder="123" required />
-                            <p id="err-cvv" class="hidden text-sm text-red-600"></p>
-                        </div>
-                    </div>
-
-                    @if($allowZelle)
-                    <!-- ZELLE ABOUT notice (pre-order) -->
-                    <div id="zelleNotice" class="hidden rounded-xl border border-purple-200 bg-purple-50 text-purple-900 p-4 mb-4">
-                        <div class="flex items-start gap-2">
-                            <div class="text-sm space-y-1">
-                                <div>✅ <b>We recommend paying with Zelle</b> — it’s our preferred payment method for US customers.</div>
-                                <div>💬 Ready to pay? <b>Click Pay</b> to follow the quick Zelle payment steps.</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ZELLE Pane (after order placed) -->
-                    <div id="zellePane" class="hidden mt-4">
-                        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                            <div class="flex items-center gap-3 border-b border-slate-200 p-4">
-                                <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#7C3AED"/><path d="M8 6h8l-7 12h7" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
-                                <div class="text-slate-800 font-semibold">Pay with Zelle®</div>
-                                <div class="ml-auto text-xs text-slate-500">USD only</div>
-                            </div>
-                            <div class="p-4 sm:p-6 space-y-4">
-                                <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
-                                    <div class="text-sm text-slate-600 sm:text-right">RECIPIENT</div>
-                                    <div class="flex items-center gap-2"><input id="zelleRecipient" class="w-full rounded-md border border-slate-300 px-3 py-2" value="MYPILLS ORG LLC" readonly></div>
-                                    <button type="button" data-copy="#zelleRecipient" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
-                                </div>
-                                <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
-                                    <div class="text-sm text-slate-600 sm:text-right">E-MAIL</div>
-                                    <div class="flex items-center gap-2"><input id="zelleEmail" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
-                                    <button type="button" data-copy="#zelleEmail" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
-                                </div>
-                                <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
-                                    <div class="text-sm text-slate-600 sm:text-right">AMOUNT</div>
-                                    <div class="flex items-center gap-2"><input id="zelleAmount" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
-                                    <button type="button" data-copy="#zelleAmount" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
-                                </div>
-                                <div class="grid sm:grid-cols-[140px_1fr_auto] items-center gap-2 sm:gap-4">
-                                    <div class="text-sm text-slate-600 sm:text-right">MEMO</div>
-                                    <div class="flex items-center gap-2"><input id="zelleMemo" class="w-full rounded-md border border-slate-300 px-3 py-2" readonly></div>
-                                    <button type="button" data-copy="#zelleMemo" class="copy-btn text-sm rounded-md border px-2.5 py-1.5">Copy</button>
-                                </div>
-                                <div class="pt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                                    <div class="flex items-center gap-2 text-purple-700">
-                                        <svg id="zelleClockIcon" width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                                        <span id="zelleTimer" class="text-xl font-semibold tabular-nums">00:15:00</span>
-                                        <span id="zelleStatus" class="text-xs text-slate-500" aria-live="polite">awaiting payment</span>
-                                    </div>
-                                    <button id="zellePaidBtn" type="button" class="rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-medium px-5 py-2.5">I HAVE PAID</button>
-                                </div>
-                                <div class="pt-1 text-xs text-slate-500">Need more time? <button id="extendHold" type="button" class="underline">Extend hold by 10 minutes</button></div>
-                                <div class="mt-3 rounded-lg border border-purple-200 bg-purple-50 px-5 py-4 text-sm leading-relaxed text-slate-700">
-                                    <div class="flex items-center mb-3"><span class="text-purple-600 text-lg mr-2">💬</span><span class="font-semibold text-slate-800">Zelle Payment Instructions</span></div>
-                                    <div class="flex items-start mb-2"><span class="text-purple-500 text-base mr-2 mt-[2px]">🧾</span><p>Please enter <span class="font-semibold">only your order number</span> in the Comments or Notes field when sending your Zelle payment.</p></div>
-                                    <div class="flex items-start mb-2"><span class="text-yellow-500 text-base mr-2 mt-[2px]">⚠️</span><p><span class="font-semibold">IMPORTANT:</span> Do not include website name, product names, or any other details — this may cause your Zelle transaction to be declined.</p></div>
-                                    <div class="flex items-start"><span class="text-green-500 text-base mr-2 mt-[2px]">✅</span><p>For automatic matching, the <span class="font-semibold">amount</span> and <span class="font-semibold">sender’s full name</span> must exactly match your order details.</p></div>
-                                </div>
-                                <div class="pt-2 text-xs">Prefer a different method? <button type="button" id="switchToCard" class="underline">Pay by card instead</button></div>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-                    <button id="payBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-3 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" aria-live="polite" aria-busy="false">
+                    <button id="payBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg mt-3 px-4 py-3 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" aria-live="polite" aria-busy="false">
                         <svg id="paySpinner" class="hidden h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"></circle>
                             <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
@@ -506,6 +543,28 @@
         __toastTimer = setTimeout(()=>{ t.style.opacity = '0'; }, 1500);
     }
 
+    function fillAirwallexFields(resp){
+        const benef=document.getElementById('airwallexBenef');
+        const iban=document.getElementById('airwallexIban');
+        const bic=document.getElementById('airwallexBic');
+        const amount=document.getElementById('airwallexAmount');
+        const ref=document.getElementById('airwallexRef');
+        const respBenef = resp && (resp.beneficiary || resp.recipient) ? String(resp.beneficiary || resp.recipient) : null;
+        const respIban  = resp && resp.iban ? String(resp.iban) : null;
+        const respBic   = resp && (resp.bic || resp.swift) ? String(resp.bic || resp.swift) : null;
+        const respRef   = resp && (resp.id || resp.reference || resp.memo) ? String(resp.id || resp.reference || resp.memo) : null;
+        if (benef) benef.value = respBenef || AIRWALLEX_CONFIG.beneficiary;
+        if (iban)  iban.value  = respIban  || AIRWALLEX_CONFIG.iban;
+        if (bic)   bic.value   = respBic   || AIRWALLEX_CONFIG.bic;
+        if (amount){
+            // amount in EUR
+            const totalText = (document.getElementById('total')?.textContent || '').trim();
+            if (totalText.startsWith('€')) amount.value = totalText;
+            else amount.value = `€${((USD_SUBTOTAL + getSelectedShippingUSD()) * (SELECTED_RATE || 1)).toFixed(2)}`;
+        }
+        if (ref)   ref.value   = respRef || '';
+    }
+
     function updateShippingBadges(){
         document.querySelectorAll('#shippingGroup [data-cost]').forEach(el=>{
             const usd = +el.getAttribute('data-cost') || 0;
@@ -542,12 +601,14 @@
     }
 
     // ---- Zelle: simple helpers/state ----
-    let PAY_METHOD = @json($defaultPayMethod);
+    let PAY_METHOD = null;
     let ZELLE_ORDER_PLACED = false;
+    let AIRWALLEX_ORDER_PLACED = false;
     let zelleTimerInt = null;
     let zelleDeadlineMs = null;
     let zelleExtended = false;
     const ZELLE_CONFIG = { merchantLegal: 'MYPILLS ORG LLC', zelleEmail: 'zelle@in.mypills.pro', holdMinutes: 15 };
+    const AIRWALLEX_CONFIG = { beneficiary: 'MYPILLS ORG LLC', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' };
     function startZelleTimer(minutes){ stopZelleTimer(); zelleDeadlineMs = Date.now() + minutes*60*1000; renderZelleTimer(); zelleTimerInt = setInterval(renderZelleTimer, 1000); }
     function stopZelleTimer(){ if(zelleTimerInt){ clearInterval(zelleTimerInt); zelleTimerInt=null; } }
     function renderZelleTimer(){
@@ -636,7 +697,7 @@
         const st = document.getElementById('zelleStatus');
 
         if (st) {
-            st.innerHTML = '<span class="text-green-700 font-medium">Thank you! Your payment is being verified.<br>You’ll receive a confirmation once it’s processed.</span>'; st.className='text-xs'; } document.getElementById('zelleClockIcon')?.classList.add('hidden'); document.getElementById('zelleTimer')?.classList.add('hidden'); const b=document.getElementById('zellePaidBtn'); if(b){ b.disabled=true; b.textContent='PROCESSING…'; b.className='rounded-lg bg-purple-400 text-white font-medium px-5 py-2.5 cursor-default'; } document.getElementById('extendHold')?.setAttribute('disabled','true'); const leftDyn=document.getElementById('leftStatusDynamic'); if(leftDyn){ leftDyn.dataset.state='thankyou'; leftDyn.innerHTML='<div class="text-green-700"><div class="font-semibold">Thank you! Your payment is being verified.</div><div>You’ll receive a confirmation once it’s processed.</div></div>';
+            st.innerHTML = `<span class="text-green-700 font-medium">Thank you! Your payment is being verified.<br>You'll receive a confirmation once it's processed.</span>`; st.className='text-xs'; } document.getElementById('zelleClockIcon')?.classList.add('hidden'); document.getElementById('zelleTimer')?.classList.add('hidden'); const b=document.getElementById('zellePaidBtn'); if(b){ b.disabled=true; b.textContent='PROCESSING…'; b.className='rounded-lg bg-purple-400 text-white font-medium px-5 py-2.5 cursor-default'; } document.getElementById('extendHold')?.setAttribute('disabled','true'); const leftDyn=document.getElementById('leftStatusDynamic'); if(leftDyn){ leftDyn.dataset.state='thankyou'; leftDyn.innerHTML=`<div class="text-green-700"><div class="font-semibold">Thank you! Your payment is being verified.</div><div>You'll receive a confirmation once it's processed.</div></div>`;
         }
 
         stopZelleTimer();
@@ -914,15 +975,19 @@
         // Payment method switch + US-only gate for Zelle
         function setPayMethod(m){
             PAY_METHOD = m;
-            const cardBtn=document.getElementById('pmCardBtn'); const zelleBtn=document.getElementById('pmZelleBtn');
-            [cardBtn,zelleBtn].forEach(b=>{ if(!b) return; b.classList.remove('pm-active'); b.setAttribute('aria-selected','false'); });
+            const cardBtn=document.getElementById('pmCardBtn'); const zelleBtn=document.getElementById('pmZelleBtn'); const airwallexBtn=document.getElementById('pmAirwallexBtn');
+            [cardBtn,zelleBtn,airwallexBtn].forEach(b=>{ if(!b) return; b.classList.remove('pm-active'); b.setAttribute('aria-selected','false'); });
             if(m==='card'){
                 cardBtn?.classList.add('pm-active','bg-blue-600','text-white','border-blue-600');
                 cardBtn?.classList.remove('border-blue-600/40','text-blue-700');
                 zelleBtn?.classList.remove('bg-purple-600','text-white','border-purple-600');
                 zelleBtn?.classList.add('border-purple-600/40','text-purple-700');
+                airwallexBtn?.classList.remove('bg-teal-600','text-white','border-teal-600');
+                airwallexBtn?.classList.add('border-teal-600/40','text-teal-700');
                 cardBtn?.setAttribute('aria-selected','true');
-            } else {
+                document.getElementById('airwallexNotice')?.classList.add('hidden');
+                document.getElementById('airwallexPane')?.classList.add('hidden');
+            } else if (m==='zelle') {
                 // Gate on US only
                 const country = document.getElementById('billCountry')?.value;
                 if(country !== 'US'){ PAY_METHOD='card'; return setPayMethod('card'); }
@@ -930,7 +995,29 @@
                 zelleBtn?.classList.remove('border-purple-600/40','text-purple-700');
                 cardBtn?.classList.remove('bg-blue-600','text-white','border-blue-600');
                 cardBtn?.classList.add('border-blue-600/40','text-blue-700');
+                airwallexBtn?.classList.remove('bg-teal-600','text-white','border-teal-600');
+                airwallexBtn?.classList.add('border-teal-600/40','text-teal-700');
                 zelleBtn?.setAttribute('aria-selected','true');
+                document.getElementById('airwallexNotice')?.classList.add('hidden');
+                document.getElementById('airwallexPane')?.classList.add('hidden');
+            } else if (m==='airwallex') {
+                // Enforce EUR
+                try {
+                    if (currentCurr !== 'EUR') {
+                        const eurBtn = document.querySelector('#currencySwitch .curr-btn[data-curr="EUR"]');
+                        if (eurBtn) eurBtn.click();
+                        else { showFormAlert('warning','SEPA is EUR-only and EUR is not available.'); PAY_METHOD='card'; return setPayMethod('card'); }
+                    }
+                } catch(_) {}
+                airwallexBtn?.classList.add('pm-active','bg-teal-600','text-white','border-teal-600');
+                airwallexBtn?.classList.remove('border-teal-600/40','text-teal-700');
+                cardBtn?.classList.remove('bg-blue-600','text-white','border-blue-600');
+                cardBtn?.classList.add('border-blue-600/40','text-blue-700');
+                zelleBtn?.classList.remove('bg-purple-600','text-white','border-purple-600');
+                zelleBtn?.classList.add('border-purple-600/40','text-purple-700');
+                airwallexBtn?.setAttribute('aria-selected','true');
+                document.getElementById('zelleNotice')?.classList.add('hidden');
+                document.getElementById('airwallexPane')?.classList.add('hidden');
             }
             const isCard = PAY_METHOD==='card';
             document.getElementById('cardPane')?.classList.toggle('hidden', !isCard);
@@ -955,9 +1042,18 @@
                 document.getElementById('zellePane')?.classList.add('hidden');
                 ZELLE_ORDER_PLACED=false; resetZelleUI(); stopZelleTimer();
             }
+            // Show Airwallex pre-notice only when selected
+            if (m==='airwallex') {
+                document.getElementById('airwallexNotice')?.classList.remove('hidden');
+                document.getElementById('airwallexPane')?.classList.add('hidden');
+            } else {
+                document.getElementById('airwallexNotice')?.classList.add('hidden');
+                document.getElementById('airwallexPane')?.classList.add('hidden');
+            }
         }
         document.getElementById('pmCardBtn')?.addEventListener('click',()=>setPayMethod('card'));
         document.getElementById('pmZelleBtn')?.addEventListener('click',()=>setPayMethod('zelle'));
+        document.getElementById('pmAirwallexBtn')?.addEventListener('click',()=>setPayMethod('airwallex'));
         setPayMethod(PAY_METHOD);
 
         // Show Zelle method only for US billing country
@@ -1278,6 +1374,15 @@
                     document.getElementById('zellePane')?.scrollIntoView({behavior:'smooth', block:'start'});
                     return;
                 }
+                if (PAY_METHOD==='airwallex') {
+                    if (!data.success) { showFormAlert('danger', data.message ?? 'Order failed. Please try again.'); return; }
+                    AIRWALLEX_ORDER_PLACED = true; fillAirwallexFields(data);
+                    document.getElementById('airwallexNotice')?.classList.remove('hidden');
+                    document.getElementById('airwallexPane')?.classList.remove('hidden');
+                    document.getElementById('payBtn')?.classList.add('hidden');
+                    document.getElementById('airwallexPane')?.scrollIntoView({behavior:'smooth', block:'start'});
+                    return;
+                }
                 if (!data.success) { showFormAlert('danger', data.message ?? 'Payment failed. Please verify your card details or try again later.'); return; }
                 window.location.replace(`/pay/${token}/thank-you`);
             } catch (e) {
@@ -1285,6 +1390,35 @@
             } finally {
                 spinner.classList.add('hidden'); if(lockIcon){ lockIcon.classList.remove('hidden'); } payBtn.disabled=false; payBtn.setAttribute('aria-busy','false');
             }
+        });
+
+        // SEPA: invoice PDF + paid state
+        document.addEventListener('click', (e)=>{
+            if (e.target?.id === 'airwallexInvoiceBtn') {
+                try {
+                    const { jsPDF } = window.jspdf || {};
+                    if (!jsPDF) return;
+                    const doc = new jsPDF();
+                    doc.setFontSize(16); doc.text('SEPA Invoice', 20, 20);
+                    doc.setFontSize(11);
+                    const lines = [
+                        `Beneficiary: ${document.getElementById('airwallexBenef')?.value||''}`,
+                        `IBAN: ${document.getElementById('airwallexIban')?.value||''}`,
+                        `BIC: ${document.getElementById('airwallexBic')?.value||''}`,
+                        `Amount: ${document.getElementById('airwallexAmount')?.value||''}`,
+                        `Reference: ${document.getElementById('airwallexRef')?.value||''}`
+                    ];
+                    lines.forEach((l,i)=>doc.text(l,20,40+i*8));
+                    doc.save('invoice.pdf');
+                } catch(_) {}
+            }
+        });
+        document.getElementById('airwallexPaidBtn')?.addEventListener('click',()=>{
+            const btn = document.getElementById('airwallexPaidBtn');
+            if (!btn) return;
+            btn.disabled=true; btn.textContent='PROCESSING…';
+            btn.classList.remove('bg-slate-800','hover:bg-slate-900');
+            btn.classList.add('bg-slate-400','cursor-default');
         });
 
         // Zelle: interactions
@@ -1304,8 +1438,8 @@
 
         // Switch back to card from Zelle pane
         document.getElementById('switchToCard')?.addEventListener('click', ()=>{
-            const btn = document.getElementById('pmCardBtn');
-            if (btn) { btn.click(); } else { try { setPayMethod('card'); } catch(_) {} }
+            const row = document.getElementById('row-card');
+            if (row) openRow(row);
             try { document.getElementById('payBtn')?.classList.remove('hidden'); } catch(_) {}
             try { document.getElementById('cardPane')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(_) {}
         });
@@ -1329,6 +1463,136 @@
                 note.classList.add('visible-note'); note.classList.remove('hidden-note');
             }
         }
+
+        // Ensure card fields required/visible state is toggled consistently
+        function setCardRequired(isCard){
+            const details = document.getElementById('cardDetails');
+            const cardEl = document.getElementById('card');
+            const expEl = document.getElementById('exp');
+            const cvvEl = document.getElementById('cvv');
+            const errCard = document.getElementById('err-card');
+            const errExp = document.getElementById('err-exp');
+            const errCvv = document.getElementById('err-cvv');
+            const cardPane = document.getElementById('cardPane');
+
+            if (cardPane) cardPane.classList.toggle('hidden', !isCard);
+            if (details) details.classList.toggle('hidden', !isCard);
+
+            if (cardEl) {
+                cardEl.toggleAttribute('required', isCard);
+                if (!isCard) {
+                    cardEl.setAttribute('aria-invalid','false');
+                    if (errCard){ errCard.classList.add('hidden'); errCard.textContent=''; }
+                    cardEl.classList.remove('border-red-500','ring-1','ring-red-300');
+                }
+            }
+            if (expEl) {
+                expEl.toggleAttribute('required', isCard);
+                if (!isCard) {
+                    expEl.setAttribute('aria-invalid','false');
+                    if (errExp){ errExp.classList.add('hidden'); errExp.textContent=''; }
+                    expEl.classList.remove('border-red-500','ring-1','ring-red-300');
+                }
+            }
+            if (cvvEl) {
+                cvvEl.toggleAttribute('required', isCard);
+                if (!isCard) {
+                    cvvEl.setAttribute('aria-invalid','false');
+                    if (errCvv){ errCvv.classList.add('hidden'); errCvv.textContent=''; }
+                    cvvEl.classList.remove('border-red-500','ring-1','ring-red-300');
+                }
+            }
+        }
+
+        function openRow(row){
+            if (!row) return;
+            const method = row.getAttribute('data-method');
+            // Gating
+            if (method === 'zelle'){
+                const country = document.getElementById('billCountry')?.value;
+                if (country !== 'US') { showToast('Zelle is US only'); return; }
+            }
+            // if (method === 'airwallex'){
+            //     if (currentCurr !== 'EUR'){
+            //         const eurBtn = document.querySelector('#currencySwitch .curr-btn[data-curr="EUR"]');
+            //         if (eurBtn) eurBtn.click(); else { showFormAlert('warning', 'Airwallex is EUR-only. EUR is not available for this order.'); return; }
+            //     }
+            // }
+            document.querySelectorAll('.pm-row').forEach(r=>{
+                const isOpen = r === row;
+                r.setAttribute('aria-checked', isOpen ? 'true' : 'false');
+                const content = r.querySelector('.pm-content');
+                if (content) content.classList.toggle('open', isOpen);
+            });
+            PAY_METHOD = method;
+            const isCard = PAY_METHOD === 'card';
+            // Show/hide panes inside contents
+            const cardPane = document.getElementById('cardPane');
+            const cardDetails = document.getElementById('cardDetails');
+            const zelleNotice = document.getElementById('zelleNotice');
+            const zellePane = document.getElementById('zellePane');
+            const airNotice = document.getElementById('airwallexNotice');
+            const airPane = document.getElementById('airwallexPane');
+
+            // Reset all to hidden by default
+            if (cardPane) cardPane.classList.add('hidden');
+            if (cardDetails) cardDetails.classList.add('hidden');
+            if (zelleNotice) zelleNotice.classList.add('hidden');
+            if (zellePane) zellePane.classList.add('hidden');
+            if (airNotice) airNotice.classList.add('hidden');
+            if (airPane) airPane.classList.add('hidden');
+
+            if (isCard){
+                if (cardPane) cardPane.classList.remove('hidden');
+                if (cardDetails) cardDetails.classList.remove('hidden');
+            } else if (PAY_METHOD === 'zelle'){
+                if (ZELLE_ORDER_PLACED) {
+                    if (zellePane) zellePane.classList.remove('hidden');
+                } else {
+                    if (zelleNotice) zelleNotice.classList.remove('hidden');
+                }
+            } else if (PAY_METHOD === 'airwallex'){
+                if (AIRWALLEX_ORDER_PLACED) {
+                    if (airPane) airPane.classList.remove('hidden');
+                } else {
+                    if (airNotice) airNotice.classList.remove('hidden');
+                }
+            }
+
+            setCardRequired(isCard);
+            // Reset Zelle UI only when switching AWAY from Zelle
+            if (method !== 'zelle'){ ZELLE_ORDER_PLACED=false; resetZelleUI(); stopZelleTimer(); }
+            refreshPayLabel();
+            try { row.scrollIntoView({behavior:'smooth',block:'start'}); } catch(_) {}
+        }
+
+        // Bind row interactions (direct and delegated)
+        document.querySelectorAll('.pm-row').forEach(r=>{
+            r.addEventListener('click', e=>{ const radio = r.querySelector('input[type="radio"]'); if (radio) radio.checked = true; openRow(r); });
+            r.addEventListener('keydown', e=>{ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); const radio = r.querySelector('input[type="radio"]'); if (radio) radio.checked = true; openRow(r); }});
+        });
+        document.addEventListener('click', (e)=>{
+            // Ignore clicks within expanded content; only header area should toggle
+            if (e.target.closest('.pm-content')) return;
+            const row = e.target.closest('.pm-row');
+            if (!row) return;
+            const radio = row.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+            openRow(row);
+        });
+        document.addEventListener('change', (e)=>{
+            const radio = e.target && e.target.matches && e.target.matches('.pm-row input[type="radio"]') ? e.target : null;
+            if (!radio) return;
+            const row = radio.closest('.pm-row');
+            if (row) openRow(row);
+        });
+
+        // Default: all methods closed, disable Pay button until selection
+        try {
+            const payBtnInit = document.getElementById('payBtn');
+            if (payBtnInit) payBtnInit.disabled = true;
+            refreshPayLabel();
+        } catch(_) {}
     });
 </script>
 <!-- Google Maps Places (Autocomplete) -->

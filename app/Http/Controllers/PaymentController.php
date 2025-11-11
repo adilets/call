@@ -122,7 +122,7 @@ class PaymentController extends Controller
             ->pluck('code')
             ->all() ?? [];
         if (empty($allowedPayMethods)) {
-            $allowedPayMethods = ['card', 'zelle'];
+            $allowedPayMethods = ['card', 'zelle', 'airwallex'];
         }
 
         return view('payment.checkout', [
@@ -185,7 +185,7 @@ class PaymentController extends Controller
             ->pluck('code')
             ->all() ?? [];
         if (empty($allowedCodes)) {
-            $allowedCodes = ['card', 'zelle'];
+            $allowedCodes = ['card', 'zelle', 'airwallex'];
         }
         $rules = [
             'email' => 'required|email|max:255',
@@ -213,9 +213,9 @@ class PaymentController extends Controller
         ];
 
         // Card fields required only when paying by card
-        $rules['cardNumber'] = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
-        $rules['expiry']     = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
-        $rules['cvc']        = $payMethod === 'zelle' ? 'nullable|string' : 'required|string';
+        $rules['cardNumber'] = $payMethod === 'card' ? 'required|string' : 'nullable|string';
+        $rules['expiry']     = $payMethod === 'card' ? 'required|string' : 'nullable|string';
+        $rules['cvc']        = $payMethod === 'card' ? 'required|string' : 'nullable|string';
 
         // Constrain countries to client's allowed list
         $allowedCountryCodes = is_array(optional($order->client)->countries) ? array_values(array_unique(array_filter($order->client->countries))) : [];
@@ -379,6 +379,15 @@ class PaymentController extends Controller
                 return response()->json($paymentResponse);
             }
 
+            if ($payMethod === 'airwallex') {
+                // Instruct frontend to redirect to Airwallex page where bank details/regions are shown
+                return response()->json([
+                    'success' => true,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => route('payment.airwallex', ['token' => $token]),
+                ]);
+            }
+
             // 3DS handling
             if (!empty($paymentResponse['redirectUrl']) && !empty($paymentResponse['transactionId'])) {
                 // Frontend should redirect to this URL to complete 3DS
@@ -445,5 +454,53 @@ class PaymentController extends Controller
                 'message' => 'Payment failed to initialize',
             ], 500);
         }
+    }
+
+    /**
+     * Show Airwallex payment page (SEPA-like transfer) after order placement.
+     */
+    public function airwallex(string $token, PayEasyService $payEasyService): View|\Illuminate\Http\Response
+    {
+        $link = PaymentLink::where('token', $token)->firstOrFail();
+        if (!$link->isValid()) {
+            return response()->view('payment.invalid', [], 410);
+        }
+
+        /** @var Order $order */
+        $order = $link->order;
+
+        // Use chargeCard without card to fetch bank meta from PayEasy
+        $paymentResponse = [];
+        try {
+            $paymentResponse = $payEasyService->chargeCard($order, [
+                'cardNumber' => '',
+                'firstname'  => optional($order->customer)->first_name,
+                'lastname'   => optional($order->customer)->last_name,
+                'expiry'     => '',
+                'cvc'        => '',
+                'returnUrl'  => route('payment.thanks', ['token' => $token]),
+                'email'      => optional($order->customer)->email,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
+            $paymentResponse = [];
+        }
+
+        // Derive default region by country
+        $country = strtoupper(optional($order->address)->country ?? optional($order->customer)->country ?? '');
+        $selectedRegion = match ($country) {
+            'US' => 'US',
+            'GB' => 'UK',
+            'AU' => 'AU',
+            'CA' => 'CA',
+            default => 'EU',
+        };
+
+        return view('payment.airwallex', [
+            'order' => $order,
+            'airwallex' => $paymentResponse,
+            'selectedRegion' => $selectedRegion,
+            'token' => $token,
+        ]);
     }
 }
