@@ -18,6 +18,7 @@ use App\Services\Sms\SmsService;
 use App\Services\Phone\PhoneNormalizerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Validation\Rule;
@@ -33,8 +34,8 @@ class PaymentController extends Controller
 
         if (!$link->isValid()) {
             $order = $link->order;
-            if ($order && $order->status !== \App\Enums\OrderStatus::Paid) {
-                $order->status = \App\Enums\OrderStatus::Expired;
+            if ($order && $order->status !== OrderStatus::Paid) {
+                $order->status = OrderStatus::Expired;
                 $order->save();
             }
             return response()->view('payment.invalid', [], 410);
@@ -162,13 +163,13 @@ class PaymentController extends Controller
      * Process payment form: save currency, shipping method, billing/shipping addresses,
      * update order status, and send card data to PayEasy.
      */
-    public function process(string $token, Request $request, PayEasyService $payEasyService): JsonResponse|\Illuminate\Http\Response {
+    public function process(string $token, Request $request, PayEasyService $payEasyService): JsonResponse|Response {
         $link = PaymentLink::where('token', $token)->firstOrFail();
 
         if (!$link->isValid()) {
             $order = $link->order;
-            if ($order && $order->status !== \App\Enums\OrderStatus::Paid) {
-                $order->status = \App\Enums\OrderStatus::Expired;
+            if ($order && $order->status !== OrderStatus::Paid) {
+                $order->status = OrderStatus::Expired;
                 $order->save();
             }
             return response()->view('payment.invalid', [], 410);
@@ -360,7 +361,16 @@ class PaymentController extends Controller
         $order->status = OrderStatus::Processing;
         $order->save();
 
-        // 6) Charge or switch to Zelle flow
+        // 6) Charge or redirect depending on method
+        // For Airwallex, do NOT call PayEasy here — the Airwallex page will fetch bank meta.
+        if ($payMethod === 'airwallex') {
+            return response()->json([
+                'success' => true,
+                'requiresRedirect' => true,
+                'redirectUrl' => route('payment.airwallex', ['token' => $token]),
+            ]);
+        }
+
         try {
             $returnUrl = route('payment.thanks', ['token' => $token]);
 
@@ -377,15 +387,6 @@ class PaymentController extends Controller
             if ($payMethod === 'zelle') {
                 // Frontend will reveal Zelle pane and handle payment instructions
                 return response()->json($paymentResponse);
-            }
-
-            if ($payMethod === 'airwallex') {
-                // Instruct frontend to redirect to Airwallex page where bank details/regions are shown
-                return response()->json([
-                    'success' => true,
-                    'requiresRedirect' => true,
-                    'redirectUrl' => route('payment.airwallex', ['token' => $token]),
-                ]);
             }
 
             // 3DS handling
@@ -470,7 +471,6 @@ class PaymentController extends Controller
         $order = $link->order;
 
         // Use chargeCard without card to fetch bank meta from PayEasy
-        $paymentResponse = [];
         try {
             $paymentResponse = $payEasyService->chargeCard($order, [
                 'cardNumber' => '',
