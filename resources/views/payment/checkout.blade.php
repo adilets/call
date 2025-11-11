@@ -1587,12 +1587,20 @@
             if (row) openRow(row);
         });
 
-        // Default: all methods closed, disable Pay button until selection
-        try {
-            const payBtnInit = document.getElementById('payBtn');
-            if (payBtnInit) payBtnInit.disabled = true;
-            refreshPayLabel();
-        } catch(_) {}
+        if (PAY_METHOD) {
+            const defaultRow = document.querySelector(`.pm-row[data-method="${PAY_METHOD}"]`) || document.getElementById('row-card') || document.querySelector('.pm-row');
+
+            if (defaultRow) openRow(defaultRow);
+        }
+
+        function refreshPayLabel(){
+            try {
+                const label = document.getElementById('payLabel');
+                if (!label) return;
+                const totalText = (document.getElementById('total')?.textContent || '').trim();
+                label.textContent = (PAY_METHOD === 'card') ? `Pay ${totalText}` : `Place order — ${totalText}`;
+            } catch(_) {}
+        }
     });
 </script>
 <!-- Google Maps Places (Autocomplete) -->
