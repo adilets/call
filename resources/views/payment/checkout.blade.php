@@ -391,7 +391,7 @@
                                     <div class="font-medium mb-1">How it works:</div>
                                     <ol class="list-decimal ml-5 text-sm space-y-1">
                                         <li>Click <b>Place order</b> to generate your payment reference.</li>
-                                        <li>Send a <b>SEPA transfer</b> using the bank details shown next.</li>
+                                        <li>Make a bank transfer using the payment details shown next.</li>
                                         <li>Once the transfer is complete, click <b>I HAVE PAID</b> to speed up verification.</li>
                                     </ol>
                                 </div>
