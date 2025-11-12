@@ -93,7 +93,9 @@
     <div id="fields" class="mt-3 grid gap-2.5"></div>
 
     <div class="mt-3 rounded-xl bg-amber-50 p-2.5 text-[13px] text-amber-800 leading-5">
-      👉 Auto-match with correct reference • 🔒 Local banking network • ⚡ Most payments arrive instantly
+{{--      👉 Auto-match with correct reference • 🔒 Local banking network • ⚡ Most payments arrive instantly--}}
+        👉 Please make the payment to the bank account above — be sure to include your reference number.<br>
+        Once you’ve sent it, click <b>I HAVE PAID</b> so we can confirm it faster ⚡️
     </div>
 
     <div class="mt-3.5 flex flex-wrap items-center justify-end gap-1.5">
