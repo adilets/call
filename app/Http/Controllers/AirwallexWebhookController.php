@@ -16,12 +16,30 @@ class AirwallexWebhookController extends Controller
     {
         $validated = $request->validate([
             'orderId' => 'required|integer|exists:orders,id',
+            'status' => 'required',
+            'amount' => 'required',
+            'currency' => 'required'
         ]);
 
         /** @var Order|null $order */
         $order = Order::query()->find($validated['orderId']);
         if (!$order) {
             return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        if ($validated['status'] == 'PARTIALLY_PAID') {
+            $order->status = OrderStatus::PartiallyPaid;
+            $order->paid_amount = (float) $validated['amount'];
+            $order->paid_currency = strtoupper((string) $validated['currency']);
+            $order->save();
+
+            return response()->json([
+                'success' => true,
+                'orderId' => $order->id,
+                'status' => $order->status->value,
+                'paid_amount' => $order->paid_amount,
+                'paid_currency' => $order->paid_currency,
+            ]);
         }
 
         // Mark as paid

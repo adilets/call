@@ -247,6 +247,23 @@ class OrderResource extends Resource
                             ->label('Last modified at')
                             ->content(fn (Order $record): ?string => $record->updated_at?->diffForHumans()),
 
+                        Forms\Components\Placeholder::make('paid_amount_display')
+                            ->label('Paid amount')
+                            ->content(function (?Order $record): ?string {
+                                if (!$record || $record->paid_amount === null || !$record->paid_currency) {
+                                    return null;
+                                }
+                                $currency = strtoupper($record->paid_currency);
+                                $cents = (int) round(((float) $record->paid_amount) * 100);
+                                return Money::$currency($cents)->format();
+                            })
+                            ->hidden(fn (?Order $record) => $record?->paid_amount === null || !$record?->paid_currency),
+
+                        Forms\Components\Placeholder::make('paid_currency_display')
+                            ->label('Paid currency')
+                            ->content(fn (?Order $record): ?string => $record?->paid_currency)
+                            ->hidden(fn (?Order $record) => !$record?->paid_currency),
+
                         Forms\Components\Hidden::make('order_id')
                             ->default(fn (?Order $record) => $record?->id)
                             ->dehydrated(false),
@@ -371,7 +388,13 @@ class OrderResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('status')->badge(),
+
+                Tables\Columns\TextColumn::make('status')
+                    ->getStateUsing(fn ($record) => $record->status)
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof OrderStatus ? $state->getLabel() : \Illuminate\Support\Str::headline((string) $state))
+                    ->color(fn ($state) => $state instanceof OrderStatus ? ($state->getColor() ?? null) : null)
+                    ->icon(fn ($state) => $state instanceof OrderStatus ? $state->getIcon() : null),
 
                 Tables\Columns\TextColumn::make('pay_method')
                     ->label('Pay Method')
