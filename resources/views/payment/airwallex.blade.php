@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <title>Local Payment — EU / UK / AU / US / CA</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon2.png') }}" />
     <style>
         :root{ --shadow-1:0 10px 24px -16px rgba(2,6,23,.24); --ring-blue:#93c5fd; }
         .card{ box-shadow:var(--shadow-1); position:relative; }
