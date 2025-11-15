@@ -49,7 +49,7 @@ class CreateOrder extends CreateRecord
             'rate' => $rate,
         ]);
 
-        $link = PaymentLink::generateForOrder($this->record->id, 1440);
+        $link = PaymentLink::generateForOrder($this->record->id, (int) env('PAYMENT_LINK_TTL', 1440));
 
         $this->record->update([
             'number' => 'OR-' . $this->record->id,

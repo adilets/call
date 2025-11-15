@@ -36,7 +36,7 @@ class PaymentLink extends Model
 
     public function isValid(): bool
     {
-        return ! $this->revoked
+        return ! $this->revoked && ! $this->used_at
             && (! $this->expires_at || $this->expires_at->isFuture())
             && (! $this->max_clicks || $this->clicks < $this->max_clicks);
     }

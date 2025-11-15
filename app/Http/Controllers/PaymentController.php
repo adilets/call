@@ -16,9 +16,11 @@ use App\Services\Email\EmailService;
 use App\Services\PayEasyService;
 use App\Services\Sms\SmsService;
 use App\Services\Phone\PhoneNormalizerService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Validation\Rule;
@@ -149,6 +151,9 @@ class PaymentController extends Controller
         if (!$link) {
             abort(404, 'No Payment link found.');
         }
+
+        $link->used_at = Carbon::now()->tz('America/New_York')->toDateTimeString();
+        $link->save();
 
         $order = $link->order;
 
@@ -470,20 +475,27 @@ class PaymentController extends Controller
         /** @var Order $order */
         $order = $link->order;
 
-        // Use chargeCard without card to fetch bank meta from PayEasy
-        try {
-            $paymentResponse = $payEasyService->chargeCard($order, [
-                'cardNumber' => '',
-                'firstname'  => optional($order->customer)->first_name,
-                'lastname'   => optional($order->customer)->last_name,
-                'expiry'     => '',
-                'cvc'        => '',
-                'returnUrl'  => route('payment.thanks', ['token' => $token]),
-                'email'      => optional($order->customer)->email,
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
-            $paymentResponse = [];
+        $returnUrl = route('payment.thanks', ['token' => $token, 'pm' => 'airwallex']);
+
+        $paymentResponse = Cache::get($token);
+        if (!$paymentResponse) {
+            // Use chargeCard without card to fetch bank meta from PayEasy
+            try {
+                $paymentResponse = $payEasyService->chargeCard($order, [
+                    'cardNumber' => '',
+                    'firstname'  => optional($order->customer)->first_name,
+                    'lastname'   => optional($order->customer)->last_name,
+                    'expiry'     => '',
+                    'cvc'        => '',
+                    'returnUrl'  => $returnUrl,
+                    'email'      => optional($order->customer)->email,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
+                $paymentResponse = [];
+            }
+        } else {
+            Cache::put($token, $paymentResponse, env('PAYMENT_LINK_TTL', 1440));
         }
 
         // Derive default region by country
@@ -498,9 +510,11 @@ class PaymentController extends Controller
 
         return view('payment.airwallex', [
             'order' => $order,
-            'airwallex' => $paymentResponse,
+            'regions' => $paymentResponse,
             'selectedRegion' => $selectedRegion,
             'token' => $token,
+            'referenceNumber' => $paymentResponse['reference'],
+            'redirectUrl' => $returnUrl
         ]);
     }
 }
