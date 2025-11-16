@@ -478,8 +478,8 @@ class PaymentController extends Controller
         $returnUrl = route('payment.thanks', ['token' => $token, 'pm' => 'airwallex']);
 
         $paymentResponse = Cache::get($token);
+
         if (!$paymentResponse) {
-            // Use chargeCard without card to fetch bank meta from PayEasy
             try {
                 $paymentResponse = $payEasyService->chargeCard($order, [
                     'cardNumber' => '',
@@ -494,7 +494,7 @@ class PaymentController extends Controller
                 Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
                 $paymentResponse = [];
             }
-        } else {
+
             Cache::put($token, $paymentResponse, env('PAYMENT_LINK_TTL', 1440));
         }
 
