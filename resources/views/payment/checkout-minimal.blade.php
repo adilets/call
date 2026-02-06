@@ -68,18 +68,19 @@
     /** @var \App\Models\Order $order */
     $items = isset($order) ? ($order->items ?? collect()) : collect();
     $usdSubtotal = $items->sum(fn ($i) => (float) ($i->qty ?? 0) * (float) ($i->unit_price ?? 0));
+    $usdSubtotal = (float) ($order->total_price ?? $usdSubtotal);
     $shippingMethods = collect($shippingMethods ?? []);
     $selectedShippingId = isset($order) ? ($order->shipping_method_id ?? null) : null;
     $selectedShipping = $shippingMethods->firstWhere('id', $selectedShippingId) ?? $shippingMethods->first();
-    $shippingCostUsd = (float) ($selectedShipping->cost ?? 0);
+    $shippingCostUsd = 0.0;
     $selectedRate = (float) ($currencies[$selectedCurrency] ?? 1.0);
     $currencySymbol = $currencySymbols[$selectedCurrency] ?? '$';
 @endphp
 <div class="max-w-6xl mx-auto p-4 lg:p-8">
-    <div class="grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
+    <div class="flex justify-center">
 
         <!-- LEFT -->
-        <aside class="space-y-4 lg:sticky lg:top-6 self-start">
+        <aside class="space-y-4 lg:sticky lg:top-6 self-start hidden">
 
             @if(is_array($currencies ?? []) && count($currencies ?? []) > 1)
                 <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
@@ -173,7 +174,7 @@
         </aside>
 
         <!-- RIGHT -->
-        <div class="bg-white rounded-2xl shadow-lg p-6">
+        <div class="bg-white rounded-2xl shadow-lg p-6 w-full max-w-2xl">
             <div id="formAlert" class="hidden mb-4 rounded-lg border px-4 py-3 text-sm" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
             <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
@@ -190,6 +191,10 @@
             <form id="checkoutForm" novalidate>
                 <!-- Billing -->
                 <section class="mb-8">
+                    <div class="flex items-center justify-between text-sm font-semibold text-slate-700 mb-2">
+                        <span>Total to pay</span>
+                        <span>{{ $currencySymbol }}{{ number_format($usdSubtotal * $selectedRate, 2) }}</span>
+                    </div>
                     <h2 class="text-lg font-semibold mb-3">Billing Information</h2>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -508,12 +513,23 @@
     let currentRate = SELECTED_RATE;
     let currentSymbol = @json($currencySymbol);
     const USD_SUBTOTAL = {{ number_format($usdSubtotal, 2, '.', '') }};
-    const USD_SHIPPING_INITIAL = {{ number_format($shippingCostUsd, 2, '.', '') }};
+    const USD_SHIPPING_INITIAL = 0;
+    const ORDER_TOTAL_USD = {{ number_format((float) ($order->total_price ?? $usdSubtotal), 2, '.', '') }};
+
+    function updatePayLabel(){
+        const amount = (ORDER_TOTAL_USD * currentRate).toFixed(2);
+        const label = `Pay ${currentSymbol}${amount}`;
+        const el = document.getElementById('payLabel');
+        if (el) {
+            el.textContent = label;
+        }
+    }
 
     // Helpers
     const $ = (id)=>document.getElementById(id);
     const fmt = (v,c)=> c==='EUR' ? `€${v.toFixed(2)}` : `$${v.toFixed(2)}`;
     function announce(msg){ const r=$('liveRegion'); if(!r) return; r.textContent=''; setTimeout(()=>r.textContent=msg,10); }
+    updatePayLabel();
     // Visible toast helper for quick user feedback
     let __toastTimer = null;
     function showToast(message){
@@ -560,44 +576,9 @@
             // amount in EUR
             const totalText = (document.getElementById('total')?.textContent || '').trim();
             if (totalText.startsWith('€')) amount.value = totalText;
-            else amount.value = `€${((USD_SUBTOTAL + getSelectedShippingUSD()) * (SELECTED_RATE || 1)).toFixed(2)}`;
+            else amount.value = `€${((USD_SUBTOTAL) * (SELECTED_RATE || 1)).toFixed(2)}`;
         }
         if (ref)   ref.value   = respRef || '';
-    }
-
-    function updateShippingBadges(){
-        document.querySelectorAll('#shippingGroup [data-cost]').forEach(el=>{
-            const usd = +el.getAttribute('data-cost') || 0;
-            el.textContent = usd === 0 ? 'Free' : (currentSymbol + (usd * currentRate).toFixed(2));
-        });
-        // Update item line amounts when currency changes
-        document.querySelectorAll('.item-line-amount').forEach(el=>{
-            const lineUsd = parseFloat(el.getAttribute('data-line-usd')||'0');
-            const val = (lineUsd * currentRate).toFixed(2);
-            el.textContent = `${currentSymbol}${val}`;
-        });
-    }
-    function getSelectedShippingUSD(){
-        const sel = document.querySelector('#shippingGroup input[name="shipping"]:checked');
-        return sel ? parseFloat(sel.value || '0') : 0;
-    }
-    function updateTotals(announceIt=true){
-        // Use integer cents to avoid floating point rounding discrepancies
-        const subCents  = Math.round(USD_SUBTOTAL * currentRate * 100);
-        const shipUSD   = getSelectedShippingUSD();
-        const shipCents = Math.round(shipUSD * currentRate * 100);
-
-        const subStr  = (subCents / 100).toFixed(2);
-        const shipStr = shipCents === 0 ? 'Free' : (currentSymbol + (shipCents / 100).toFixed(2));
-        const totalCents = subCents + shipCents;
-        const totalStr = (totalCents / 100).toFixed(2);
-
-        $('subtotal').textContent = currentSymbol + subStr;
-        $('shippingPrice').textContent = shipStr;
-        $('total').textContent = currentSymbol + totalStr;
-        const payLabel = document.getElementById('payLabel');
-        if (payLabel) payLabel.textContent = `Pay ${currentSymbol}${totalStr}`;
-        if(announceIt) announce(`Total updated to ${currentSymbol}${totalStr}.`);
     }
 
     // ---- Zelle: simple helpers/state ----
@@ -667,7 +648,7 @@
         if(email){
             if (respEmail) email.value = respEmail; else if (!(email.value||'').trim()) email.value = ZELLE_CONFIG.zelleEmail;
         }
-        if(amount) amount.value = `$${(USD_SUBTOTAL + getSelectedShippingUSD()).toFixed(2)}`;
+        if(amount) amount.value = `$${(USD_SUBTOTAL).toFixed(2)}`;
         if(memo) memo.value = respMemo || '';
         if(recip){
             if (respRecip) recip.value = respRecip; else if (!(recip.value||'').trim()) recip.value = ZELLE_CONFIG.merchantLegal;
@@ -1064,18 +1045,7 @@
         }
         updateZelleButtonVisibility();
 
-        // Currency switch
-        document.querySelectorAll('#currencySwitch .curr-btn').forEach(btn=>{
-            btn.addEventListener('click',()=>{
-                document.querySelectorAll('#currencySwitch .curr-btn').forEach(b=>{ b.classList.remove('bg-blue-600','text-white','border-blue-600'); b.classList.add('text-blue-700','border-blue-600/40'); });
-                btn.classList.add('bg-blue-600','text-white','border-blue-600'); btn.classList.remove('text-blue-700','border-blue-600/40');
-                currentCurr = btn.dataset.curr; currentRate = parseFloat(btn.dataset.rateFull||btn.dataset.rate||'1'); currentSymbol = btn.dataset.symbol||'$';
-                updateShippingBadges(); updateTotals(true);
-            });
-        });
-        document.querySelectorAll('#shippingGroup input[name="shipping"]').forEach(r=> r.addEventListener('change',()=>updateTotals(true)));
-
-        updateTotals(false);
+        updatePayLabel();
         updateCountryDependentUI('bill');
         updateCountryDependentUI('ship');
         // Initialize Google Places Autocomplete for Billing and Shipping
@@ -1309,9 +1279,6 @@
             payBtn.disabled=true; payBtn.setAttribute('aria-busy','true'); spinner.classList.remove('hidden'); if(lockIcon){ lockIcon.classList.add('hidden'); }
 
             const token = window.location.pathname.split('/').pop();
-            const selectedShip = document.querySelector('#shippingGroup input[name="shipping"]:checked');
-            const shippingMethodId = selectedShip ? selectedShip.getAttribute('data-method-id') : null;
-
             const phoneE164 = (window.itiBilling && typeof window.itiBilling.getNumber === 'function' && window.itiBilling.isValidNumber())
                 ? window.itiBilling.getNumber()
                 : $('billPhone').value.trim();
@@ -1335,7 +1302,6 @@
                 shippingState: $('shipRegion')?.value,
                 shippingZip: $('shipPostcode')?.value,
                 shippingPhone: null,
-                shipping_method_id: shippingMethodId,
                 currency: currentCurr,
                 rate: currentRate,
                 cardNumber: PAY_METHOD==='card' ? $('card').value : null,
@@ -1598,7 +1564,7 @@
                 const label = document.getElementById('payLabel');
                 if (!label) return;
                 const totalText = (document.getElementById('total')?.textContent || '').trim();
-                label.textContent = (PAY_METHOD === 'card') ? `Pay ${totalText}` : `Place order — ${totalText}`;
+                label.textContent = (PAY_METHOD === 'card') ? `Pay ${totalText} ${currentCurr}` : `Place order — ${totalText} ${currentCurr}`;
             } catch(_) {}
         }
     });

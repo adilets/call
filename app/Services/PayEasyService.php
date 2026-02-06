@@ -91,7 +91,7 @@ class PayEasyService
         $endpoint = $baseUrl . '/api/transactions/' . $clientPath;
 
         $headers = [];
-        if ($token = config('services.payeasy.token')) {
+        if ($token = $order->client->api_key) {
             $headers['Authorization'] = 'Bearer ' . $token;
         }
 

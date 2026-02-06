@@ -45,6 +45,7 @@ class ProductResource extends Resource
     use AppliesRoleScope;
 
     protected static ?string $model = Product::class;
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Products';
     protected static ?string $navigationIcon = 'heroicon-o-cube';
     protected static ?string $navigationGroup = 'Shop';

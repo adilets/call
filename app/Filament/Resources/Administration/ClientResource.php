@@ -46,6 +46,11 @@ class ClientResource extends Resource
                             ->helperText('Custom path for PayEasy endpoints, provided by the provider')
                             ->maxLength(255),
 
+                        TextInput::make('api_key')
+                            ->label('API Key')
+                            ->helperText('Client API key for provider integration.')
+                            ->maxLength(255),
+
                         Select::make('currencies')
                             ->label('Currencies')
                             ->multiple()

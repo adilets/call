@@ -42,6 +42,7 @@ class OrderResource extends Resource
     use AppliesRoleScope;
 
     protected static ?string $model = Order::class;
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
 

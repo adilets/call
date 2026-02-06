@@ -56,6 +56,7 @@ class PaymentController extends Controller
          * @var Order $order
          */
         $order = $link->order;
+        $isMinimalLink = $order && $order->items()->count() === 0;
 
         // Build currency set based on client settings (fallback to USD/EUR)
         $rateEur = (float) (CurrencyRate::query()
@@ -128,7 +129,9 @@ class PaymentController extends Controller
             $allowedPayMethods = ['card', 'zelle', 'airwallex'];
         }
 
-        return view('payment.checkout', [
+        $view = $isMinimalLink ? 'payment.checkout-minimal' : 'payment.checkout';
+
+        return view($view, [
             'order'            => $order,
             'currencies'       => $currencies,
             'selectedCurrency' => $selectedCurrency,

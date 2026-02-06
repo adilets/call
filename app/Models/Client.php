@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Client extends Model
 {
-    protected $fillable = ['name', 'company', 'phone', 'path', 'currencies', 'countries'];
+    protected $fillable = ['name', 'company', 'phone', 'path', 'api_key', 'currencies', 'countries'];
 
     protected $casts = [
         'currencies' => 'array',
