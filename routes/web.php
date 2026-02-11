@@ -28,4 +28,8 @@ Route::domain(env('DOMAIN_PAYMENT', 'getsecurepay.net'))->group(function () {
         ->name('payment.process');
 
     Route::get('/pay/{token}/airwallex', [PaymentController::class, 'airwallex'])->name('payment.airwallex');
+
+    Route::get('/pay/{token}/zelle', [PaymentController::class, 'zelle'])->name('payment.zelle');
+
+    Route::get('/pay/{token}/venmo', [PaymentController::class, 'venmo'])->name('payment.venmo');
 });

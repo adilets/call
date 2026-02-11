@@ -47,5 +47,9 @@ return [
 
     'google' => [
         'maps_key' => env('GOOGLE_MAPS_API_KEY'),
-    ]
+    ],
+
+    'fingerprint' => [
+        'public_key' => env('FINGERPRINT_PRO_PUBLIC_KEY', 'lWTD04XMM1wl8qOUY5xn'),
+    ],
 ];

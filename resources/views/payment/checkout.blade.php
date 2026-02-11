@@ -74,6 +74,13 @@
     $shippingCostUsd = (float) ($selectedShipping->cost ?? 0);
     $selectedRate = (float) ($currencies[$selectedCurrency] ?? 1.0);
     $currencySymbol = $currencySymbols[$selectedCurrency] ?? '$';
+    if ($isMinimalLink && $usdSubtotal <= 0) {
+        $orderTotal = (float) ($order?->total_price ?? 0);
+        $orderRate = (float) ($order?->rate ?? 1.0);
+        $usdSubtotal = $order?->currency && strtoupper($order->currency) !== 'USD'
+            ? $orderTotal / max($orderRate, 0.000001)
+            : $orderTotal;
+    }
 @endphp
 <div class="max-w-6xl mx-auto p-4 lg:p-8">
     <div class="grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
@@ -188,6 +195,8 @@
             @endphp
 
             <form id="checkoutForm" novalidate>
+                <input type="hidden" name="payeasy_fp_visitor_id" id="payeasy_fp_visitor_id" value="" />
+                <input type="hidden" name="payeasy_fp_request_id" id="payeasy_fp_request_id" value="" />
                 <!-- Billing -->
                 <section class="mb-8">
                     <h2 class="text-lg font-semibold mb-3">Billing Information</h2>
@@ -234,7 +243,7 @@
                             <input id="billCity" value="{{ $billing?->city }}" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" required />
                             <p id="err-billCity" class="hidden text-sm text-red-600"></p>
                         </div>
-                        <div>
+                        <div id="billRegionField">
                             <label for="billRegion" class="block text-sm font-medium text-slate-700"><span id="billRegionLabel">State / County</span> <span class="text-red-600">*</span></label>
                             <select id="billRegion" data-current-value="{{ $billing?->state }}" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" required></select>
                             <p id="err-billRegion" class="hidden text-sm text-red-600"></p>
@@ -303,7 +312,7 @@
                             <input id="shipCity" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" />
                             <p id="err-shipCity" class="hidden text-sm text-red-600"></p>
                         </div>
-                        <div>
+                        <div id="shipRegionField">
                             <label for="shipRegion" class="block text-sm font-medium text-slate-700"><span id="shipRegionLabel">State / County</span> <span class="text-red-600">*</span></label>
                             <select id="shipRegion" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"></select>
                             <p id="err-shipRegion" class="hidden text-sm text-red-600"></p>
@@ -324,11 +333,13 @@
                     </h2>
 
                     @php
-                        $allowedPayMethods = $allowedPayMethods ?? ['card','zelle','airwallex'];
+                        $allowedPayMethods = $allowedPayMethods ?? ['card','zelle','venmo','cardtousdt','airwallex'];
                         $allowCard = in_array('card', $allowedPayMethods, true);
                         $allowZelle = in_array('zelle', $allowedPayMethods, true);
+                        $allowVenmo = in_array('venmo', $allowedPayMethods, true);
+                        $allowCardToUsdt = in_array('cardtousdt', $allowedPayMethods, true);
                         $allowSepa = in_array('airwallex', $allowedPayMethods, true);
-                        $defaultPayMethod = $allowCard ? 'card' : ($allowZelle ? 'zelle' : ($allowSepa ? 'airwallex' : 'card'));
+                        $defaultPayMethod = $allowCard ? 'card' : ($allowZelle ? 'zelle' : ($allowVenmo ? 'venmo' : ($allowCardToUsdt ? 'cardtousdt' : ($allowSepa ? 'airwallex' : 'card'))));
                     @endphp
 
                     <!-- Payment rows (accordion) -->
@@ -374,12 +385,40 @@
                             </div>
                         </div>
                         @endif
+                        @if($allowCardToUsdt)
+                        <div id="row-cardtousdt" class="pm-row" role="radio" aria-checked="false" data-method="cardtousdt" tabindex="-1">
+                            <div class="flex items-center gap-3 p-4">
+                                <input type="radio" name="pm" value="cardtousdt" class="h-4 w-4 text-emerald-600">
+                                <div class="font-medium text-slate-800 flex items-center gap-3 w-full">
+                                    <div class="hidden sm:flex items-center gap-1.5">
+                                        <img src="{{ asset('images/payment-methods/apple.png') }}" alt="Apple Pay" class="h-5 w-auto">
+                                        <img src="{{ asset('images/payment-methods/google.png') }}" alt="Google Pay" class="h-5 w-auto">
+                                        <img src="{{ asset('images/payment-methods/master.png') }}" alt="Mastercard" class="h-5 w-auto">
+                                        <img src="{{ asset('images/payment-methods/revolute.png') }}" alt="Revolut" class="h-5 w-auto">
+                                        <img src="{{ asset('images/payment-methods/visa.png') }}" alt="Visa" class="h-5 w-auto">
+                                    </div>
+                                    <div class="leading-tight">
+                                        <div>Secure Credit/Debit Card</div>
+                                        <div class="text-[13px] font-normal text-slate-500">(Processed via Crypto On-Ramp • KYC Required)</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pm-content" id="row-cardtousdt-content">
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-4">
+                                    <div class="text-sm space-y-1">
+                                        <div>🔒 Hosted card checkout with instant payout to USDT.</div>
+                                        <div>➡️ Click <b>Place order</b> to open the hosted payment page.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
                         @if($allowSepa)
                         <div id="row-airwallex" class="pm-row" role="radio" aria-checked="false" data-method="airwallex" tabindex="-1">
                             <div class="flex items-center gap-3 p-4">
                                 <input type="radio" name="pm" value="airwallex" class="h-4 w-4 text-teal-600">
                                 <div class="font-medium text-slate-800 flex items-center gap-2">
-                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 9h16M5 9l7-5 7 5M6 11v7m4-7v7m4-7v7m4-7v7M4 18h16" stroke="#2563EB" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+                                    <img src="{{ asset('images/payment-methods/bank.png') }}" alt="Local Payment" class="h-5 w-auto">
                                     <div>
                                         <p>Local Payment (EU / UK / AU / US / CA)</p>
                                         <p class="text-[13px] text-slate-500 leading-5">Pay easily via SEPA, ACH, FPS, Interac or local bank transfer.</p>
@@ -403,8 +442,8 @@
                             <div class="flex items-center gap-3 p-4">
                                 <input type="radio" name="pm" value="zelle" class="h-4 w-4 text-purple-600">
                                 <div class="font-medium text-slate-800 flex items-center gap-2">
-                                    <svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="#7C3AED"/><path d="M9 6h7l-6 12h6" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
-                                    Zelle <span class="brand-badge ml-2" style="background:#f3e8ff;color:#7C3AED;border:1px solid #e9d5ff">US only</span>
+                                    <img src="{{ asset('images/payment-methods/zelle.png') }}" alt="Zelle" class="h-5 w-auto">
+                                    Zelle
                                 </div>
                             </div>
                             <div class="pm-content" id="row-zelle-content">
@@ -419,7 +458,7 @@
                                 <div id="zellePane" class="hidden mt-4">
                                     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                                         <div class="flex items-center gap-3 border-b border-slate-200 p-4">
-                                            <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#7C3AED"/><path d="M8 6h8l-7 12h7" stroke="#fff" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+                                            <img src="{{ asset('images/payment-methods/zelle.png') }}" alt="Zelle" class="h-7 w-auto" aria-hidden="true">
                                             <div class="text-slate-800 font-semibold">Pay with Zelle®</div>
                                             <div class="ml-auto text-xs text-slate-500">USD only</div>
                                         </div>
@@ -466,6 +505,27 @@
                             </div>
                         </div>
                         @endif
+                        @if($allowVenmo)
+                        <div id="row-venmo" class="pm-row" role="radio" aria-checked="false" data-method="venmo" tabindex="-1">
+                            <div class="flex items-center gap-3 p-4">
+                                <input type="radio" name="pm" value="venmo" class="h-4 w-4 text-blue-600">
+                                <div class="font-medium text-slate-800 flex items-center gap-2">
+                                    <img src="{{ asset('images/payment-methods/venmo.png') }}" alt="Venmo" class="h-5 w-auto">
+                                    Venmo <span class="brand-badge ml-2" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">Preferred</span>
+                                </div>
+                            </div>
+                            <div class="pm-content" id="row-venmo-content">
+                                <div class="rounded-xl border border-blue-200 bg-blue-50 text-blue-900 p-4">
+                                    <div class="flex items-start gap-2">
+                                        <div class="text-sm space-y-1">
+                                            <div>✅ <b>We recommend paying with Venmo</b> for fast confirmation.</div>
+                                            <div>📱 Click <b>Pay</b> to get your Venmo QR code and details.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
                     </div>
 
                     <button id="payBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg mt-3 px-4 py-3 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" aria-live="polite" aria-busy="false">
@@ -502,11 +562,17 @@
 
 <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.10.11/build/js/intlTelInputWithUtils.min.js"></script>
 <script>
+    window.PayeasyFingerprint = window.PayeasyFingerprint || {};
+    window.PayeasyFingerprint.publicKey = @json($fingerprintPublicKey ?? '');
+</script>
+<script type="module" src="{{ asset('js/payeasy-fingerprint-pro.js') }}"></script>
+<script>
     // Data from server
     const SELECTED_RATE = {{ number_format($selectedRate, 6, '.', '') }};
     let currentCurr = @json($selectedCurrency);
     let currentRate = SELECTED_RATE;
     let currentSymbol = @json($currencySymbol);
+    const CURRENCY_SYMBOLS = @json($currencySymbols ?? []);
     const USD_SUBTOTAL = {{ number_format($usdSubtotal, 2, '.', '') }};
     const USD_SHIPPING_INITIAL = {{ number_format($shippingCostUsd, 2, '.', '') }};
 
@@ -581,23 +647,32 @@
         const sel = document.querySelector('#shippingGroup input[name="shipping"]:checked');
         return sel ? parseFloat(sel.value || '0') : 0;
     }
+    function getPayDisplayCurrency(){
+        if (PAY_METHOD === 'zelle' || PAY_METHOD === 'venmo') return 'USD';
+        return currentCurr;
+    }
     function updateTotals(announceIt=true){
         // Use integer cents to avoid floating point rounding discrepancies
-        const subCents  = Math.round(USD_SUBTOTAL * currentRate * 100);
+        const payCurr = getPayDisplayCurrency();
+        const payRate = payCurr === 'USD' ? 1 : currentRate;
+        const paySymbol = CURRENCY_SYMBOLS[payCurr] || currentSymbol || payCurr;
+
+        const subCents  = Math.round(USD_SUBTOTAL * payRate * 100);
         const shipUSD   = getSelectedShippingUSD();
-        const shipCents = Math.round(shipUSD * currentRate * 100);
+        const shipCents = Math.round(shipUSD * payRate * 100);
 
         const subStr  = (subCents / 100).toFixed(2);
-        const shipStr = shipCents === 0 ? 'Free' : (currentSymbol + (shipCents / 100).toFixed(2));
+        const shipStr = shipCents === 0 ? 'Free' : (paySymbol + (shipCents / 100).toFixed(2));
         const totalCents = subCents + shipCents;
         const totalStr = (totalCents / 100).toFixed(2);
 
-        $('subtotal').textContent = currentSymbol + subStr;
+        $('subtotal').textContent = paySymbol + subStr;
         $('shippingPrice').textContent = shipStr;
-        $('total').textContent = currentSymbol + totalStr;
+        $('total').textContent = paySymbol + totalStr;
         const payLabel = document.getElementById('payLabel');
-        if (payLabel) payLabel.textContent = `Pay ${currentSymbol}${totalStr}`;
-        if(announceIt) announce(`Total updated to ${currentSymbol}${totalStr}.`);
+        if (payLabel) payLabel.textContent = `Pay ${paySymbol}${totalStr}`;
+        if(announceIt) announce(`Total updated to ${paySymbol}${totalStr}.`);
+        return { payCurr, totalStr, paySymbol };
     }
 
     // ---- Zelle: simple helpers/state ----
@@ -721,6 +796,7 @@
     function hideFormAlert(){
         const el = document.getElementById('formAlert');
         if (!el) return;
+        if (paymentErrorSticky) return;
         el.classList.add('hidden');
         el.textContent = '';
     }
@@ -783,14 +859,58 @@
     const US_STATES = @json(array_values($states ?? []));
     const GB_COUNTIES = @json(array_values($gbCounties ?? []));
     const AU_STATES = @json(array_values($auStates ?? []));
+    const CA_PROVINCES = @json(array_values($caProvinces ?? []));
+    const ES_PROVINCES = @json(array_values($esProvinces ?? []));
+    const IT_PROVINCES = @json(array_values($itProvinces ?? []));
     const DE_STATES = @json(array_values($deStates ?? []));
     const FR_REGIONS = @json(array_values($frRegions ?? []));
+    const REGION_COUNTRIES = new Set(['US', 'GB', 'AU', 'CA', 'DE', 'FR', 'ES', 'IT']);
+    const POSTCODE_PLACEHOLDERS = {
+        US: 'e.g., 94105',
+        AU: 'e.g., 2000',
+        GB: 'e.g., SW1A 1AA',
+        CA: 'e.g., A1A 1A1',
+        AT: 'e.g., 1010',
+        BE: 'e.g., 1000',
+        BG: 'e.g., 1000',
+        HR: 'e.g., 10000',
+        CY: 'e.g., 1010',
+        CZ: 'e.g., 110 00',
+        DK: 'e.g., 2100',
+        EE: 'e.g., 10111',
+        FI: 'e.g., 00100',
+        FR: 'e.g., 75001',
+        DE: 'e.g., 10115',
+        GR: 'e.g., 105 58',
+        HU: 'e.g., 1051',
+        IE: 'e.g., D02 X285',
+        IT: 'e.g., 20121',
+        LV: 'e.g., LV-1050',
+        LT: 'e.g., LT-01100',
+        LU: 'e.g., L-1111',
+        MT: 'e.g., VLT 1111',
+        NL: 'e.g., 1012 AB',
+        PL: 'e.g., 00-001',
+        PT: 'e.g., 1100-150',
+        RO: 'e.g., 010011',
+        SK: 'e.g., 811 01',
+        SI: 'e.g., 1000',
+        ES: 'e.g., 28001',
+        SE: 'e.g., 114 55',
+        NO: 'e.g., 0150',
+        CH: 'e.g., 8001',
+        IS: 'e.g., 101',
+        LI: 'e.g., 9490',
+    };
     function fillRegionSelect(selectEl, countryCode, current){
         if(!selectEl) return;
         let list = [];
         if (countryCode === 'US') list = US_STATES;
         else if (countryCode === 'GB') list = GB_COUNTIES;
         else if (countryCode === 'AU') list = AU_STATES;
+        else if (countryCode === 'CA') list = CA_PROVINCES;
+        else if (countryCode === 'ES') list = ES_PROVINCES;
+        else if (countryCode === 'IT') list = IT_PROVINCES;
         else if (countryCode === 'DE') list = DE_STATES;
         else if (countryCode === 'FR') list = FR_REGIONS;
         selectEl.innerHTML = `<option value="">${list.length ? 'Select...' : 'N/A'}</option>` + list.map(v=>`<option${(current && current.toLowerCase()===String(v).toLowerCase())?' selected':''}>${v}</option>`).join('');
@@ -800,14 +920,16 @@
         const country = $(prefix+'Country').value;
         const regionEl = $(prefix+'Region');
         const current = regionEl.getAttribute('data-current-value') || '';
+        const requiresRegion = REGION_COUNTRIES.has(country);
         fillRegionSelect(regionEl, country, current);
-        $(prefix+'RegionLabel').textContent = country==='US' ? 'State' : country==='GB' ? 'County' : country==='AU' ? 'State' : 'State / County';
+        const regionFieldEl = $(prefix+'RegionField');
+        if (regionFieldEl) regionFieldEl.classList.toggle('hidden', !requiresRegion);
+        if (!requiresRegion) regionEl.value = '';
+        $(prefix+'RegionLabel').textContent = country==='US' ? 'State' : country==='GB' ? 'County' : country==='AU' ? 'State' : country==='CA' ? 'Province / Territory' : country==='ES' ? 'Provinces' : country==='IT' ? 'Province' : country==='DE' ? 'State' : country==='FR' ? 'Region' : 'State / County';
         const labelEl = $(prefix+'PostcodeLabel');
         const inputEl = $(prefix+'Postcode');
-        if(country==='US'){ labelEl.textContent='ZIP'; inputEl.placeholder='e.g., 94105'; }
-        else if(country==='AU'){ labelEl.textContent='Postcode'; inputEl.placeholder='e.g., 2000'; }
-        else if(country==='GB'){ labelEl.textContent='Postcode'; inputEl.placeholder='e.g., SW1A 1AA'; }
-        else { labelEl.textContent='Postcode'; inputEl.placeholder='e.g., 10115'; }
+        labelEl.textContent = country==='US' ? 'ZIP' : 'Postcode';
+        inputEl.placeholder = POSTCODE_PLACEHOLDERS[country] || 'e.g., 10115';
     }
 
     // --- Google Places Autocomplete helpers ---
@@ -970,9 +1092,18 @@
         slot.innerHTML=icon;
     }
 
+    const INITIAL_PAYMENT_ERROR = @json($paymentError ?? '');
+    let paymentErrorSticky = false;
+
     // Wire DOM
     window.addEventListener('DOMContentLoaded', ()=>{
-        // Payment method switch + US-only gate for Zelle
+        if (INITIAL_PAYMENT_ERROR) {
+            showFormAlert('danger', INITIAL_PAYMENT_ERROR);
+            paymentErrorSticky = true;
+            try { document.getElementById('formAlert')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+        }
+
+        // Payment method switch
         function setPayMethod(m){
             PAY_METHOD = m;
             const cardBtn=document.getElementById('pmCardBtn'); const zelleBtn=document.getElementById('pmZelleBtn'); const airwallexBtn=document.getElementById('pmAirwallexBtn');
@@ -988,9 +1119,6 @@
                 document.getElementById('airwallexNotice')?.classList.add('hidden');
                 document.getElementById('airwallexPane')?.classList.add('hidden');
             } else if (m==='zelle') {
-                // Gate on US only
-                const country = document.getElementById('billCountry')?.value;
-                if(country !== 'US'){ PAY_METHOD='card'; return setPayMethod('card'); }
                 zelleBtn?.classList.add('pm-active','bg-purple-600','text-white','border-purple-600');
                 zelleBtn?.classList.remove('border-purple-600/40','text-purple-700');
                 cardBtn?.classList.remove('bg-blue-600','text-white','border-blue-600');
@@ -1056,14 +1184,6 @@
         document.getElementById('pmAirwallexBtn')?.addEventListener('click',()=>setPayMethod('airwallex'));
         setPayMethod(PAY_METHOD);
 
-        // Show Zelle method only for US billing country
-        function updateZelleButtonVisibility(){
-            const zBtn = document.getElementById('pmZelleBtn');
-            const country = document.getElementById('billCountry')?.value;
-            if (zBtn) zBtn.classList.toggle('hidden', country !== 'US');
-        }
-        updateZelleButtonVisibility();
-
         // Currency switch
         document.querySelectorAll('#currencySwitch .curr-btn').forEach(btn=>{
             btn.addEventListener('click',()=>{
@@ -1127,10 +1247,8 @@
                         window.itiBilling.setCountry(iso);
                     }
                 } catch(_) {}
-                // If Zelle selected and not US -> switch to card
-                try { if(PAY_METHOD==='zelle' && billCountryEl.value !== 'US'){ setPayMethod('card'); } } catch(_) {}
-                // Toggle Zelle button visibility by country
-                updateZelleButtonVisibility();
+                // Zelle/Venmo are US-only.
+                updateUsOnlyMethodVisibility();
             });
         }
 
@@ -1281,19 +1399,20 @@
         $('checkoutForm').addEventListener('submit', async (e)=>{
             e.preventDefault();
             // quick validate + summary
+            paymentErrorSticky = false;
             const requiredIds=['billEmail','billFirst','billLast','billCountry','billAddress1','billCity','billPostcode','billPhone'];
             if (PAY_METHOD==='card') requiredIds.push('card','exp','cvv');
-            // Require region only for US and AU (billing)
+            // Require region only for countries that explicitly use it.
             const billCountryVal = $('billCountry').value;
-            if (billCountryVal === 'US' || billCountryVal === 'AU') {
+            if (REGION_COUNTRIES.has(billCountryVal)) {
                 requiredIds.push('billRegion');
             }
-            // If shipping section is visible, validate its fields; region required for US/AU
+            // If shipping section is visible, validate its fields; region required only for region countries.
             const shippingVisible = !$('shipSame').checked;
             if (shippingVisible) {
                 requiredIds.push('shipFirst','shipLast','shipCountry','shipAddress1','shipCity','shipPostcode');
                 const shipCountryVal = $('shipCountry').value;
-                if (shipCountryVal === 'US' || shipCountryVal === 'AU') {
+                if (REGION_COUNTRIES.has(shipCountryVal)) {
                     requiredIds.push('shipRegion');
                 }
             }
@@ -1316,6 +1435,17 @@
                 ? window.itiBilling.getNumber()
                 : $('billPhone').value.trim();
 
+            let fpVisitorId = document.querySelector('input[name="payeasy_fp_visitor_id"]')?.value || '';
+            let fpRequestId = document.querySelector('input[name="payeasy_fp_request_id"]')?.value || '';
+            try {
+                if (window.PayeasyFingerprint?.getResult) {
+                    const fp = await window.PayeasyFingerprint.getResult();
+                    fpVisitorId = fp?.visitorId || fpVisitorId;
+                    fpRequestId = fp?.requestId || fpRequestId;
+                }
+            } catch (_) {}
+
+            const payInfo = updateTotals(false) || {};
             const payload = {
                 email: $('billEmail').value,
                 billingFirstname: $('billFirst').value,
@@ -1323,7 +1453,7 @@
                 billingCountry: $('billCountry').value,
                 billingAddress: $('billAddress1').value,
                 billingCity: $('billCity').value,
-                billingState: (function(){ const v=$('billRegion').value; const c=$('billCountry').value; return (c==='US'||c==='AU') ? v : (v || '-'); })(),
+                billingState: (function(){ const v=$('billRegion').value; const c=$('billCountry').value; return REGION_COUNTRIES.has(c) ? v : '-'; })(),
                 billingZip: $('billPostcode').value,
                 billingPhone: phoneE164,
                 shippingSame: $('shipSame').checked,
@@ -1342,6 +1472,10 @@
                 expiry:     PAY_METHOD==='card' ? $('exp').value  : null,
                 cvc:        PAY_METHOD==='card' ? $('cvv').value  : null,
                 pay_method: PAY_METHOD,
+                fp_visitor_id: fpVisitorId || null,
+                fp_request_id: fpRequestId || null,
+                expected_amount: payInfo.totalStr ? parseFloat(payInfo.totalStr) : null,
+                expected_currency: payInfo.payCurr || null,
             };
 
             try {
@@ -1507,11 +1641,6 @@
         function openRow(row){
             if (!row) return;
             const method = row.getAttribute('data-method');
-            // Gating
-            if (method === 'zelle'){
-                const country = document.getElementById('billCountry')?.value;
-                if (country !== 'US') { showToast('Zelle is US only'); return; }
-            }
             // if (method === 'airwallex'){
             //     if (currentCurr !== 'EUR'){
             //         const eurBtn = document.querySelector('#currencySwitch .curr-btn[data-curr="EUR"]');
@@ -1563,7 +1692,27 @@
             // Reset Zelle UI only when switching AWAY from Zelle
             if (method !== 'zelle'){ ZELLE_ORDER_PLACED=false; resetZelleUI(); stopZelleTimer(); }
             refreshPayLabel();
+            updateTotals(false);
             try { row.scrollIntoView({behavior:'smooth',block:'start'}); } catch(_) {}
+        }
+
+        function updateUsOnlyMethodVisibility(){
+            const country = document.getElementById('billCountry')?.value;
+            const isUS = country === 'US';
+            const zelleRow = document.getElementById('row-zelle');
+            const venmoRow = document.getElementById('row-venmo');
+            [zelleRow, venmoRow].forEach((row) => {
+                if (row) row.classList.toggle('hidden', !isUS);
+            });
+
+            if (!isUS && (PAY_METHOD === 'zelle' || PAY_METHOD === 'venmo')) {
+                const fallbackRow = document.getElementById('row-card') || document.querySelector('.pm-row:not(.hidden)');
+                if (fallbackRow) {
+                    const radio = fallbackRow.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = true;
+                    openRow(fallbackRow);
+                }
+            }
         }
 
         // Bind row interactions (direct and delegated)
@@ -1587,8 +1736,10 @@
             if (row) openRow(row);
         });
 
+        updateUsOnlyMethodVisibility();
+
         if (PAY_METHOD) {
-            const defaultRow = document.querySelector(`.pm-row[data-method="${PAY_METHOD}"]`) || document.getElementById('row-card') || document.querySelector('.pm-row');
+            const defaultRow = document.querySelector(`.pm-row[data-method="${PAY_METHOD}"]:not(.hidden)`) || document.getElementById('row-card') || document.querySelector('.pm-row:not(.hidden)');
 
             if (defaultRow) openRow(defaultRow);
         }
@@ -1597,8 +1748,9 @@
             try {
                 const label = document.getElementById('payLabel');
                 if (!label) return;
-                const totalText = (document.getElementById('total')?.textContent || '').trim();
-                label.textContent = (PAY_METHOD === 'card') ? `Pay ${totalText}` : `Place order — ${totalText}`;
+                const info = updateTotals(false) || {};
+                const display = `${info.paySymbol || ''}${info.totalStr || ''}`.trim();
+                label.textContent = (PAY_METHOD === 'card') ? `Pay ${display}` : `Place order — ${display}`;
             } catch(_) {}
         }
     });

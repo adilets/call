@@ -11,6 +11,7 @@ class PaymentLink extends Model
     protected $fillable = [
         'order_id', 'token', 'expires_at', 'used_at',
         'revoked', 'max_clicks', 'clicks',
+        'payeasy_id',
     ];
 
     protected $casts = [

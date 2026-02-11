@@ -55,6 +55,12 @@ class PaymentLinkResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('payeasy_id')
+                    ->label('ID')
+                    ->copyable()
+                    ->toggleable()
+                    ->limit(40),
+
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -107,27 +113,35 @@ class PaymentLinkResource extends Resource
                     }),
 
                 Tables\Columns\TextColumn::make('order.total_price')
-                    ->label('Total (USD)')
-                    ->money()
+                    ->label('Total (Order Currency)')
+                    ->getStateUsing(function (PaymentLink $record) {
+                        $order = $record->order;
+                        if (!$order) {
+                            return null;
+                        }
+
+                        $currency = strtoupper($order->currency ?? 'USD');
+                        $amountCents = (int) round(((float) ($order->total_price ?? 0)) * 100);
+
+                        return Money::$currency($amountCents)->format();
+                    })
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('total_price_converted')
-                    ->label('Total (Local)')
+                Tables\Columns\TextColumn::make('total_price_usd')
+                    ->label('Total (USD)')
                     ->getStateUsing(function (PaymentLink $record) {
                         $order = $record->order;
                         if (!$order) {
                             return null;
                         }
                         $currency = strtoupper($order->currency ?? 'USD');
+                        $amount = (float) ($order->total_price ?? 0);
                         $rate = (float) ($order->rate ?? 1.0);
-                        $baseUsd = (float) ($order->total_price ?? 0);
-
                         if ($currency === 'USD') {
-                            return Money::USD((int) round($baseUsd * 100))->format();
+                            return Money::USD((int) round($amount * 100))->format();
                         }
-
-                        $amountCents = (int) round($baseUsd * $rate * 100);
-                        return Money::$currency($amountCents)->format();
+                        $usdAmount = $rate > 0 ? ($amount / $rate) : $amount;
+                        return Money::USD((int) round($usdAmount * 100))->format();
                     }),
 
                 Tables\Columns\TextColumn::make('payment_link')

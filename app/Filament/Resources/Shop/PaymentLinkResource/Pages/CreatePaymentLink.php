@@ -37,10 +37,6 @@ class CreatePaymentLink extends CreateRecord
                 ->value('rate') ?: 1.0;
         }
 
-        $totalUsd = $currency === 'USD'
-            ? $price
-            : ($rate > 0 ? $price / $rate : $price);
-
         $shippingMethodId = ShippingMethod::query()
             ->where('client_id', $user->client_id)
             ->where('enabled', true)
@@ -58,7 +54,7 @@ class CreatePaymentLink extends CreateRecord
             'user_id' => $user->getAuthIdentifier(),
             'status' => OrderStatus::New,
             'currency' => $currency,
-            'total_price' => round($totalUsd, 2),
+            'total_price' => round($price, 2),
             'shipping_price' => 0,
             'shipping_method_id' => $shippingMethodId,
             'rate' => $rate,

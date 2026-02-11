@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\CurrencyRate;
 use App\Models\Order;
 use App\Models\ShippingMethod;
 use Illuminate\Http\Client\ConnectionException;
@@ -35,26 +34,13 @@ class PayEasyService
             $expirationDate = sprintf('%04d-%02d', $year, $month);
         }
 
-        $baseUsd = (float) (($order->total_price - $order->shipping_price) ?? 0);
-        $shippingUsd = $order->shipping_price ?? 0.0;
-
-        $amountUsd = $baseUsd + $shippingUsd;
+        $baseAmount = (float) (($order->total_price - $order->shipping_price) ?? 0);
+        $shippingAmount = $order->shipping_price ?? 0.0;
+        $amountOrder = $baseAmount + $shippingAmount;
         $currency = $order->currency ?? 'USD';
 
-        $amount = $amountUsd;
-
-        if (strtoupper($currency) == 'EUR') {
-            $rate = (float) CurrencyRate::query()
-                ->where('source', 'USD')
-                ->where('currency', 'EUR')
-                ->value('rate') ?: 1.0;
-
-            // Match frontend logic: convert each part (items, shipping) separately, round to cents, then sum
-            $subCents  = (int) round($baseUsd * max($rate, 0) * 100);
-            $shipCents = (int) round($shippingUsd * max($rate, 0) * 100);
-            $amountCents = $subCents + $shipCents;
-            $amount = $amountCents / 100;
-        }
+        $amount = $params['amount'] ?? $amountOrder;
+        $currency = $params['currency'] ?? $currency;
 
         // Format amount to 2 decimals (string) to meet provider expectations
         $amountCentsFinal = (int) round($amount * 100);
@@ -80,11 +66,15 @@ class PayEasyService
             'ipaddress' => request()->ip(),
             'payMethod' => $order->pay_method,
             'returnUrl' => $params['returnUrl'],
-            'pp' => 'cc'
+            'pp' => 'cc',
+            'user_agent' => $params['user_agent'] ?? request()->userAgent(),
+            'domain' => $params['domain'] ?? request()->getHost(),
+            'expected_amount' => $params['expected_amount'] ?? null,
+            'fp_visitor_id' => $params['fp_visitor_id'] ?: null,
+            'fp_request_id' => $params['fp_request_id'] ?: null,
         ];
 
         $payload = array_filter($payload, static fn ($v) => !is_null($v));
-
         $baseUrl = rtrim(config('services.payeasy.base_url', 'https://payeasy.pro'), '/');
         $clientPath = trim((string) optional($order->client)->path);
 

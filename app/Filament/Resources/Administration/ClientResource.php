@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Administration;
 
 use App\Filament\Resources\Administration;
 use App\Models\Client;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\Section;
@@ -13,6 +14,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use PragmaRX\Countries\Package\Countries;
 
 class ClientResource extends Resource
 {
@@ -54,24 +56,15 @@ class ClientResource extends Resource
                         Select::make('currencies')
                             ->label('Currencies')
                             ->multiple()
-                            ->options([
-                                'USD' => 'USD',
-                                'EUR' => 'EUR',
-                            ])
-                            ->helperText('Select allowed checkout currencies (USD/EUR).')
+                            ->options(self::getCurrenciesList())
+                            ->helperText('Select allowed checkout currencies.')
                             ->preload()
                             ->searchable(),
 
                         Select::make('countries')
                             ->label('Countries')
                             ->multiple()
-                            ->options([
-                                'US' => 'United States',
-                                'GB' => 'United Kingdom',
-                                'AU' => 'Australia',
-                                'FR' => 'France',
-                                'DE' => 'Germany',
-                            ])
+                            ->options(self::getCountriesList())
                             ->helperText('Choose which countries to show in checkout (billing/shipping).')
                             ->preload()
                             ->searchable(),
@@ -127,11 +120,43 @@ class ClientResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasRole('admin');
+        $user = Auth::user();
+
+        return $user instanceof User
+            && method_exists($user, 'hasRole')
+            && $user->hasRole('admin');
     }
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasRole('admin');
+        $user = Auth::user();
+
+        return $user instanceof User
+            && method_exists($user, 'hasRole')
+            && $user->hasRole('admin');
+    }
+
+    public static function getCountriesList(): array
+    {
+        $countries = new Countries();
+
+        return $countries->all()
+            ->mapWithKeys(fn ($country) => [
+                $country->cca2 => $country->name->common,
+            ])
+            ->sort()
+            ->toArray();
+    }
+
+    public static function getCurrenciesList(): array
+    {
+        $currencies = config('money.currencies', []);
+
+        return collect($currencies)
+            ->mapWithKeys(fn (array $meta, string $code) => [
+                $code => sprintf('%s — %s', $code, $meta['name'] ?? $code),
+            ])
+            ->sort()
+            ->toArray();
     }
 }

@@ -21,7 +21,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Illuminate\Validation\Rule;
 use PragmaRX\Countries\Package\Countries;
@@ -59,56 +61,77 @@ class PaymentController extends Controller
         $isMinimalLink = $order && $order->items()->count() === 0;
 
         // Build currency set based on client settings (fallback to USD/EUR)
-        $rateEur = (float) (CurrencyRate::query()
-            ->where('source', 'USD')
-            ->where('currency', 'EUR')
-            ->value('rate') ?? 0);
-
         $clientCurrencies = is_array(optional($order->client)->currencies) ? $order->client->currencies : [];
         $clientCurrencies = array_values(array_unique(array_filter($clientCurrencies)));
         if (empty($clientCurrencies)) {
-            $clientCurrencies = ['USD','EUR'];
+            $clientCurrencies = ['USD', 'EUR'];
         }
+        $clientCurrencies = array_values(array_unique(array_map('strtoupper', $clientCurrencies)));
+
+        $rateMap = CurrencyRate::query()
+            ->where('source', 'USD')
+            ->whereIn('currency', $clientCurrencies)
+            ->pluck('rate', 'currency')
+            ->all();
+
         $currencies = [];
         foreach ($clientCurrencies as $code) {
-            if ($code === 'USD') $currencies['USD'] = 1.0;
-            if ($code === 'EUR') $currencies['EUR'] = $rateEur > 0 ? $rateEur : 1.0;
+            if ($code === 'USD') {
+                $currencies[$code] = 1.0;
+                continue;
+            }
+            $rate = (float) ($rateMap[$code] ?? 0);
+            $currencies[$code] = $rate > 0 ? $rate : 1.0;
         }
 
         $selectedCurrency = in_array($order->currency, $clientCurrencies, true)
             ? $order->currency
-            : 'USD';
+            : ($clientCurrencies[0] ?? 'USD');
 
-        $currencySymbols = [
-            'USD' => '$',
-            'EUR' => '€',
-        ];
+        $moneyCurrencies = (array) config('money.currencies', []);
+        $currencySymbols = [];
+        foreach ($clientCurrencies as $code) {
+            $symbol = $moneyCurrencies[$code]['symbol'] ?? null;
+            $currencySymbols[$code] = is_string($symbol) && $symbol !== '' ? $symbol : $code;
+        }
 
         $flagByCode = [ 'USD' => 'us', 'EUR' => 'eu' ];
 
-        // Countries allowed per client (fallback to common set)
-        $allowedCountryCodes = is_array(optional($order->client)->countries) ? array_values(array_unique(array_filter($order->client->countries))) : [];
-        if (empty($allowedCountryCodes)) {
-            $allowedCountryCodes = ['US','GB','AU','FR','DE'];
-        }
-        $allCountryNames = [
-            'US' => 'United States',
-            'GB' => 'United Kingdom',
-            'AU' => 'Australia',
-            'FR' => 'France',
-            'DE' => 'Germany',
-        ];
+        // Countries allowed per client (fallback to all)
+        $allowedCountryCodes = is_array(optional($order->client)->countries)
+            ? array_values(array_unique(array_filter($order->client->countries)))
+            : [];
+        $countriesProvider = new Countries();
         $countries = [];
-        foreach ($allowedCountryCodes as $cc) {
-            if (isset($allCountryNames[$cc])) {
-                $countries[$cc] = $allCountryNames[$cc];
+        if (empty($allowedCountryCodes)) {
+            $countries = $countriesProvider->all()
+                ->mapWithKeys(fn ($country) => [
+                    $country->cca2 => $country->name->common,
+                ])
+                ->sort()
+                ->toArray();
+        } else {
+            foreach ($allowedCountryCodes as $cc) {
+                $code = strtoupper((string) $cc);
+                $country =
+                    $countriesProvider->where('cca2', $code)->first()
+                    ?? $countriesProvider->where('cca3', $code)->first()
+                    ?? $countriesProvider->where('ccn3', $code)->first()
+                    ?? $countriesProvider->where('name.common', $code)->first();
+                if ($country?->cca2 && $country?->name?->common) {
+                    $countries[$country->cca2] = $country->name->common;
+                }
             }
+            $countries = collect($countries)->sort()->toArray();
         }
 
         // Region lists
         $states = config('geo.us_states');
         $gbCounties = array_values(config('geo.gb_counties') ?? []);
         $auStates = array_values(config('geo.au_states') ?? []);
+        $caProvinces = array_values(config('geo.ca_provinces') ?? []);
+        $esProvinces = array_values(config('geo.es_provinces') ?? []);
+        $itProvinces = array_values(config('geo.it_provinces') ?? []);
         $deStates = array_values(config('geo.de_states') ?? []);
         $frRegions = array_values(config('geo.fr_regions') ?? []);
 
@@ -126,10 +149,13 @@ class PaymentController extends Controller
             ->pluck('code')
             ->all() ?? [];
         if (empty($allowedPayMethods)) {
-            $allowedPayMethods = ['card', 'zelle', 'airwallex'];
+            $allowedPayMethods = ['card', 'zelle', 'venmo', 'cardtousdt', 'airwallex'];
         }
 
         $view = $isMinimalLink ? 'payment.checkout-minimal' : 'payment.checkout';
+
+        $fingerprintPublicKey = (string) config('services.fingerprint.public_key', '');
+        $paymentError = session()->get('payment_error');
 
         return view($view, [
             'order'            => $order,
@@ -142,9 +168,14 @@ class PaymentController extends Controller
             'shippingMethods'  => $shippingMethods,
             'gbCounties'       => $gbCounties,
             'auStates'         => $auStates,
+            'caProvinces'      => $caProvinces,
+            'esProvinces'      => $esProvinces,
+            'itProvinces'      => $itProvinces,
             'deStates'         => $deStates,
             'frRegions'        => $frRegions,
             'allowedPayMethods'=> $allowedPayMethods,
+            'fingerprintPublicKey' => $fingerprintPublicKey,
+            'paymentError'     => $paymentError,
         ]);
     }
 
@@ -194,11 +225,21 @@ class PaymentController extends Controller
             ->pluck('code')
             ->all() ?? [];
         if (empty($allowedCodes)) {
-            $allowedCodes = ['card', 'zelle', 'airwallex'];
+            $allowedCodes = ['card', 'zelle', 'venmo', 'cardtousdt', 'airwallex'];
         }
+
+        $clientCurrencies = is_array(optional($order->client)->currencies)
+            ? array_values(array_unique(array_filter($order->client->currencies)))
+            : [];
+        if (empty($clientCurrencies)) {
+            $clientCurrencies = ['USD', 'EUR'];
+        }
+
         $rules = [
             'email' => 'required|email|max:255',
-            'currency' => 'nullable|in:USD,EUR',
+            'currency' => ['nullable', Rule::in($clientCurrencies)],
+            'expected_amount' => 'nullable|numeric',
+            'expected_currency' => 'nullable|string|max:10',
             'shipping_method_id' => 'nullable|integer|exists:shipping_methods,id',
 
             'billingFirstname'  => 'required|string|max:255',
@@ -218,7 +259,9 @@ class PaymentController extends Controller
             'shippingState'    => 'nullable|string|max:255',
             'shippingZip'      => 'nullable|string|max:32',
             'shippingPhone'    => 'nullable|string|max:64',
-            'pay_method' => ['nullable', Rule::in($allowedCodes)]
+            'pay_method' => ['nullable', Rule::in($allowedCodes)],
+            'fp_visitor_id' => 'nullable|string|max:128',
+            'fp_request_id' => 'nullable|string|max:128',
         ];
 
         // Card fields required only when paying by card
@@ -254,6 +297,22 @@ class PaymentController extends Controller
             $order->pay_method = $validated['pay_method'];
         }
 
+        $order->save();
+
+        $selectedCurrency = strtoupper((string) ($validated['currency'] ?? $order->currency ?? 'USD'));
+        $rate = (float) ($order->rate ?? 1.0);
+        $expectedCurrency = strtoupper((string) ($validated['expected_currency'] ?? ''));
+        $expectedAmount = isset($validated['expected_amount']) ? (float) $validated['expected_amount'] : null;
+
+        if ($expectedCurrency === '' || $expectedAmount === null) {
+            $expectedCurrency = in_array($payMethod, ['zelle', 'venmo'], true) ? 'USD' : $selectedCurrency;
+            $expectedAmount = (float) ($order->total_price ?? 0);
+            if ($expectedCurrency === 'USD' && $selectedCurrency !== 'USD') {
+                $expectedAmount = $rate > 0 ? $expectedAmount / $rate : $expectedAmount;
+            }
+        }
+        $order->expected_currency = $expectedCurrency;
+        $order->expected_amount = round($expectedAmount, 2);
         $order->save();
 
         // 2.1) Attach or create Customer if missing
@@ -372,17 +431,24 @@ class PaymentController extends Controller
         // 6) Charge or redirect depending on method
         // For Airwallex, do NOT call PayEasy here — the Airwallex page will fetch bank meta.
         if ($payMethod === 'airwallex') {
+            $fpVisitorId = $validated['fp_visitor_id'] ?? null;
+            $fpRequestId = $validated['fp_request_id'] ?? null;
+
             return response()->json([
                 'success' => true,
                 'requiresRedirect' => true,
-                'redirectUrl' => route('payment.airwallex', ['token' => $token]),
+                'redirectUrl' => route('payment.airwallex', [
+                    'token' => $token,
+                    'fp_visitor_id' => $fpVisitorId,
+                    'fp_request_id' => $fpRequestId,
+                ]),
             ]);
         }
 
         try {
             $returnUrl = route('payment.thanks', ['token' => $token]);
 
-            $paymentResponse = $payEasyService->chargeCard($order, [
+            $chargeParams = [
                 'cardNumber' => $validated['cardNumber'],
                 'firstname'  => $validated['billingFirstname'],
                 'lastname'   => $validated['billingLastname'] ?? null,
@@ -390,11 +456,177 @@ class PaymentController extends Controller
                 'cvc'        => $validated['cvc'],
                 'returnUrl'  => $returnUrl,
                 'email'      => $validated['email'] ?? optional($order->customer)->email,
-            ]);
+                'fp_visitor_id' => $validated['fp_visitor_id'] ?? null,
+                'fp_request_id' => $validated['fp_request_id'] ?? null,
+            ];
+
+            if ($payMethod === 'cardtousdt') {
+                $currency = strtoupper($order->currency ?? 'USD');
+                $baseAmount = (float) (($order->total_price - $order->shipping_price) ?? 0);
+                $shippingAmount = $order->shipping_price ?? 0.0;
+                $amountOrder = $baseAmount + $shippingAmount;
+                $expectedAmount = $amountOrder;
+
+                if ($currency !== 'USD') {
+                    $amountCurrency = $amountOrder;
+
+                    $convertResponse = Http::timeout(20)->get(
+                        'https://cardtousdt.getsecurepay.net/control/convert.php',
+                        [
+                            'value' => $amountCurrency,
+                            'from' => strtolower($currency),
+                        ]
+                    );
+
+                    $convertData = $convertResponse->ok() ? $convertResponse->json() : null;
+                    $expectedAmount = is_array($convertData) && isset($convertData['value_coin'])
+                        ? (float) $convertData['value_coin']
+                        : null;
+
+                    if ($expectedAmount === null) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Payment could not be processed due to failed currency conversion, please try again.',
+                        ], 502);
+                    }
+                }
+
+                $chargeParams['expected_amount'] = $expectedAmount;
+                $chargeParams['user_agent'] = $request->userAgent();
+                $chargeParams['domain'] = $request->getHost();
+            }
+
+            if (in_array($payMethod, ['zelle', 'venmo'], true)) {
+                $chargeParams['amount'] = $expectedAmount;
+                $chargeParams['currency'] = $expectedCurrency;
+            }
+
+            $paymentResponse = $payEasyService->chargeCard($order, $chargeParams);
+
+            if (!empty($paymentResponse['id']) && empty($link->payeasy_id)) {
+                $link->payeasy_id = (string) $paymentResponse['id'];
+                $link->save();
+            }
+
+            $ipqsMessage = 'This payment method is temporarily unavailable. Please try again later or use another payment method.';
+            $isIpqsBlocked = ($paymentResponse['success'] ?? null) === false
+                && ($paymentResponse['status'] ?? null) === 'declined'
+                && ($paymentResponse['message'] ?? '') === $ipqsMessage;
+
+            if ($isIpqsBlocked) {
+                session()->flash('payment_error', $ipqsMessage);
+                return response()->json([
+                    'success' => false,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => route('payment.page', ['token' => $token]),
+                ]);
+            }
 
             if ($payMethod === 'zelle') {
-                // Frontend will reveal Zelle pane and handle payment instructions
-                return response()->json($paymentResponse);
+                if (empty($paymentResponse['success'])) {
+                    return response()->json($paymentResponse);
+                }
+
+                $cacheKey = 'zelle:' . $token;
+                Cache::put($cacheKey, $paymentResponse, env('PAYMENT_LINK_TTL', 1440));
+
+                return response()->json([
+                    'success' => true,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => route('payment.zelle', ['token' => $token]),
+                ]);
+            }
+
+            if ($payMethod === 'venmo') {
+                if (empty($paymentResponse['success'])) {
+                    return response()->json($paymentResponse);
+                }
+
+                $cacheKey = 'venmo:' . $token;
+                Cache::put($cacheKey, $paymentResponse, env('PAYMENT_LINK_TTL', 1440));
+
+                return response()->json([
+                    'success' => true,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => route('payment.venmo', ['token' => $token]),
+                ]);
+            }
+
+            if ($payMethod === 'cardtousdt') {
+                if (empty($paymentResponse['success'])) {
+                    return response()->json($paymentResponse);
+                }
+
+                $walletAddress = $paymentResponse['walletAddress'] ?? null;
+                if (!$walletAddress) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Payment could not be initialized. Please try again.',
+                    ], 502);
+                }
+
+                $nonce = Str::random(16);
+                $callback = 'https://webhook.getsecurepay.net?' . http_build_query([
+                    'order_id' => $order->id,
+                    'nonce' => $nonce,
+                    'p_id' => $paymentResponse['id'] ?? null,
+                    'token' => $token,
+                ]);
+
+                $walletResponse = Http::timeout(20)->get('https://cardtousdt.getsecurepay.net/control/wallet.php', [
+                    'address' => $walletAddress,
+                    'callback' => $callback,
+                ]);
+
+                if (!$walletResponse->ok()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Payment could not be initialized. Please try again.',
+                    ], 502);
+                }
+
+                $walletData = $walletResponse->json();
+                $payAddress = is_array($walletData) ? ($walletData['address_in'] ?? null) : null;
+                if (!$payAddress) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Payment could not be initialized. Please try again.',
+                    ], 502);
+                }
+
+                $currency = strtoupper($order->currency ?? 'USD');
+                $baseUsd = (float) (($order->total_price - $order->shipping_price) ?? 0);
+                $shippingUsd = $order->shipping_price ?? 0.0;
+                $amountUsd = $baseUsd + $shippingUsd;
+                $amount = $amountUsd;
+
+                if ($currency === 'EUR') {
+                    $rate = (float) CurrencyRate::query()
+                        ->where('source', 'USD')
+                        ->where('currency', 'EUR')
+                        ->value('rate') ?: 1.0;
+
+                    $subCents  = (int) round($baseUsd * max($rate, 0) * 100);
+                    $shipCents = (int) round($shippingUsd * max($rate, 0) * 100);
+                    $amountCents = $subCents + $shipCents;
+                    $amount = $amountCents / 100;
+                }
+
+                $amountFormatted = number_format((float) $amount, 2, '.', '');
+                $email = urlencode((string) ($validated['email'] ?? optional($order->customer)->email ?? ''));
+
+                $redirectUrl = 'https://checkout.getsecurepay.net/pay.php?' . http_build_query([
+                    'address' => $payAddress,
+                    'amount' => $amountFormatted,
+                    'email' => $email,
+                    'currency' => $currency,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'requiresRedirect' => true,
+                    'redirectUrl' => $redirectUrl,
+                ]);
             }
 
             // 3DS handling
@@ -468,7 +700,7 @@ class PaymentController extends Controller
     /**
      * Show Airwallex payment page (SEPA-like transfer) after order placement.
      */
-    public function airwallex(string $token, PayEasyService $payEasyService): View|\Illuminate\Http\Response
+    public function airwallex(string $token, PayEasyService $payEasyService): View|\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
     {
         $link = PaymentLink::where('token', $token)->firstOrFail();
         if (!$link->isValid()) {
@@ -492,6 +724,8 @@ class PaymentController extends Controller
                     'cvc'        => '',
                     'returnUrl'  => $returnUrl,
                     'email'      => optional($order->customer)->email,
+                    'fp_visitor_id' => request()->input('fp_visitor_id'),
+                    'fp_request_id' => request()->input('fp_request_id'),
                 ]);
             } catch (\Throwable $e) {
                 Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
@@ -499,6 +733,21 @@ class PaymentController extends Controller
             }
 
             Cache::put($token, $paymentResponse, env('PAYMENT_LINK_TTL', 1440));
+        }
+
+        if (!empty($paymentResponse['reference']) && empty($link->payeasy_id)) {
+            $link->payeasy_id = (string) $paymentResponse['reference'];
+            $link->save();
+        }
+
+        $ipqsMessage = 'This payment method is temporarily unavailable. Please try again later or use another payment method.';
+        $isIpqsBlocked = ($paymentResponse['success'] ?? null) === false
+            && ($paymentResponse['status'] ?? null) === 'declined'
+            && ($paymentResponse['message'] ?? '') === $ipqsMessage;
+
+        if ($isIpqsBlocked) {
+            session()->flash('payment_error', $ipqsMessage);
+            return redirect()->route('payment.page', ['token' => $token]);
         }
 
         // Derive default region by country
@@ -518,6 +767,66 @@ class PaymentController extends Controller
             'token' => $token,
             'referenceNumber' => $paymentResponse['reference'],
             'redirectUrl' => $returnUrl
+        ]);
+    }
+
+    /**
+     * Show Zelle payment page after order placement.
+     */
+    public function zelle(string $token): View|\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+    {
+        $link = PaymentLink::where('token', $token)->firstOrFail();
+        if (!$link->isValid()) {
+            return response()->view('payment.invalid', [], 410);
+        }
+
+        /** @var Order $order */
+        $order = $link->order;
+
+        $cacheKey = 'zelle:' . $token;
+        $details = Cache::get($cacheKey);
+
+        if (empty($details) || !is_array($details)) {
+            session()->flash('payment_error', 'Zelle payment details are unavailable. Please place the order again.');
+            return redirect()->route('payment.page', ['token' => $token]);
+        }
+
+        $amount = number_format((float) ($order->total_price ?? 0), 2, '.', '');
+
+        return view('payment.zelle', [
+            'order' => $order,
+            'details' => $details,
+            'amount' => $amount,
+        ]);
+    }
+
+    /**
+     * Show Venmo payment page after order placement.
+     */
+    public function venmo(string $token): View|\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+    {
+        $link = PaymentLink::where('token', $token)->firstOrFail();
+        if (!$link->isValid()) {
+            return response()->view('payment.invalid', [], 410);
+        }
+
+        /** @var Order $order */
+        $order = $link->order;
+
+        $cacheKey = 'venmo:' . $token;
+        $details = Cache::get($cacheKey);
+
+        if (empty($details) || !is_array($details)) {
+            session()->flash('payment_error', 'Venmo payment details are unavailable. Please place the order again.');
+            return redirect()->route('payment.page', ['token' => $token]);
+        }
+
+        $amount = number_format((float) ($order->total_price ?? 0), 2, '.', '');
+
+        return view('payment.venmo', [
+            'order' => $order,
+            'details' => $details,
+            'amount' => $amount,
         ]);
     }
 }

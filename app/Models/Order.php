@@ -26,6 +26,8 @@ class Order extends Model
     protected $fillable = [
         'number',
         'total_price',
+        'expected_amount',
+        'expected_currency',
         'paid_amount',
         'paid_currency',
         'shipping_price',

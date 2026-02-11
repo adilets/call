@@ -105,6 +105,12 @@
 </svg>
 
 <div class="app mx-auto max-w-3xl p-4 pb-16">
+    <div class="mb-2">
+        <a href="{{ route('payment.page', ['token' => request()->route('token')]) }}" class="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-800">
+            <span aria-hidden="true">←</span>
+            Back to payment methods
+        </a>
+    </div>
     <div id="stickyRef" class="sticky-ref text-[14px] font-semibold">
         <div class="flex items-center gap-2">
             <svg width="18" height="18" class="opacity-90"><use href="#i-alert"/></svg>
