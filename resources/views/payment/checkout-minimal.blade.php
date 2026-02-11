@@ -615,6 +615,7 @@
     const ORDER_RATE = {{ number_format((float) ($order->rate ?? $selectedRate ?? 1), 6, '.', '') }};
 
     let PAY_METHOD = null;
+    const CARDTOUSDT_FEE_RATE = 0.03;
     function getSymbolByCurrency(code){
         const c = String(code || '').toUpperCase();
         return CURRENCY_SYMBOLS[c] || currentSymbol || c;
@@ -623,9 +624,12 @@
         const isUsdForced = PAY_METHOD === 'zelle' || PAY_METHOD === 'venmo';
         const payCurr = isUsdForced ? 'USD' : ORDER_CURRENCY;
         const paySymbol = getSymbolByCurrency(payCurr);
-        const totalValue = isUsdForced
+        const baseTotalValue = isUsdForced
             ? (ORDER_CURRENCY === 'USD' ? ORDER_TOTAL_ORIGINAL : (ORDER_RATE > 0 ? ORDER_TOTAL_ORIGINAL / ORDER_RATE : ORDER_TOTAL_ORIGINAL))
             : ORDER_TOTAL_ORIGINAL;
+        const totalValue = PAY_METHOD === 'cardtousdt'
+            ? Number(baseTotalValue || 0) * (1 + CARDTOUSDT_FEE_RATE)
+            : Number(baseTotalValue || 0);
         const totalStr = Number(totalValue || 0).toFixed(2);
         const subStr = totalStr;
         const shipStr = 'Free';

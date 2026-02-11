@@ -651,6 +651,7 @@
         if (PAY_METHOD === 'zelle' || PAY_METHOD === 'venmo') return 'USD';
         return currentCurr;
     }
+    const CARDTOUSDT_FEE_RATE = 0.03;
     function updateTotals(announceIt=true){
         // Use integer cents to avoid floating point rounding discrepancies
         const payCurr = getPayDisplayCurrency();
@@ -663,7 +664,10 @@
 
         const subStr  = (subCents / 100).toFixed(2);
         const shipStr = shipCents === 0 ? 'Free' : (paySymbol + (shipCents / 100).toFixed(2));
-        const totalCents = subCents + shipCents;
+        const baseTotalCents = subCents + shipCents;
+        const totalCents = PAY_METHOD === 'cardtousdt'
+            ? Math.round(baseTotalCents * (1 + CARDTOUSDT_FEE_RATE))
+            : baseTotalCents;
         const totalStr = (totalCents / 100).toFixed(2);
 
         $('subtotal').textContent = paySymbol + subStr;
