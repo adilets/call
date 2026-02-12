@@ -595,22 +595,7 @@ class PaymentController extends Controller
                 }
 
                 $currency = strtoupper($order->currency ?? 'USD');
-                $baseUsd = (float) (($order->total_price - $order->shipping_price) ?? 0);
-                $shippingUsd = $order->shipping_price ?? 0.0;
-                $amountUsd = $baseUsd + $shippingUsd;
-                $amount = $amountUsd;
-
-                if ($currency === 'EUR') {
-                    $rate = (float) CurrencyRate::query()
-                        ->where('source', 'USD')
-                        ->where('currency', 'EUR')
-                        ->value('rate') ?: 1.0;
-
-                    $subCents  = (int) round($baseUsd * max($rate, 0) * 100);
-                    $shipCents = (int) round($shippingUsd * max($rate, 0) * 100);
-                    $amountCents = $subCents + $shipCents;
-                    $amount = $amountCents / 100;
-                }
+                $amount = $order->total_price * 1.03;
 
                 $amountFormatted = number_format((float) $amount, 2, '.', '');
                 $email = urlencode((string) ($validated['email'] ?? optional($order->customer)->email ?? ''));
