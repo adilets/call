@@ -468,7 +468,7 @@ class PaymentController extends Controller
                 $expectedAmount = $amountOrder;
 
                 if ($currency !== 'USD') {
-                    $amountCurrency = $amountOrder;
+                    $amountCurrency = $amountOrder * 1.03;
 
                     $convertResponse = Http::timeout(20)->get(
                         'https://cardtousdt.getsecurepay.net/control/convert.php',
