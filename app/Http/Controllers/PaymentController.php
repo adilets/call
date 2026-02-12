@@ -477,6 +477,13 @@ class PaymentController extends Controller
                 if ($currency !== 'USD') {
                     $amountCurrency = $amountOrder * 1.03;
 
+                    Log::info('CardToUSDT: convert.php request', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'amount_currency' => $amountCurrency,
+                        'currency' => $currency,
+                    ]);
+
                     $convertResponse = Http::timeout(20)->get(
                         'https://cardtousdt.getsecurepay.net/control/convert.php',
                         [
