@@ -466,6 +466,13 @@ class PaymentController extends Controller
                 $shippingAmount = $order->shipping_price ?? 0.0;
                 $amountOrder = $baseAmount + $shippingAmount;
                 $expectedAmount = $amountOrder;
+                Log::info('CardToUSDT: conversion step started', [
+                    'order_id' => $order->id,
+                    'token' => $token,
+                    'currency' => $currency,
+                    'amount_order' => $amountOrder,
+                    'amount_with_fee' => $amountOrder * 1.03,
+                ]);
 
                 if ($currency !== 'USD') {
                     $amountCurrency = $amountOrder * 1.03;
@@ -479,11 +486,24 @@ class PaymentController extends Controller
                     );
 
                     $convertData = $convertResponse->ok() ? $convertResponse->json() : null;
+                    Log::info('CardToUSDT: convert.php response', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'http_status' => $convertResponse->status(),
+                        'ok' => $convertResponse->ok(),
+                        'body' => $convertResponse->json() ?? $convertResponse->body(),
+                    ]);
                     $expectedAmount = is_array($convertData) && isset($convertData['value_coin'])
                         ? (float) $convertData['value_coin']
                         : null;
 
                     if ($expectedAmount === null) {
+                        Log::warning('CardToUSDT: expected_amount is null after conversion', [
+                            'order_id' => $order->id,
+                            'token' => $token,
+                            'currency' => $currency,
+                            'amount_currency' => $amountCurrency,
+                        ]);
                         return response()->json([
                             'success' => false,
                             'message' => 'Payment could not be processed due to failed currency conversion, please try again.',
@@ -491,6 +511,11 @@ class PaymentController extends Controller
                     }
                 }
 
+                Log::info('CardToUSDT: conversion step finished', [
+                    'order_id' => $order->id,
+                    'token' => $token,
+                    'expected_amount' => $expectedAmount,
+                ]);
                 $chargeParams['expected_amount'] = $expectedAmount;
                 $chargeParams['user_agent'] = $request->userAgent();
                 $chargeParams['domain'] = $request->getHost();
@@ -554,11 +579,21 @@ class PaymentController extends Controller
 
             if ($payMethod === 'cardtousdt') {
                 if (empty($paymentResponse['success'])) {
+                    Log::warning('CardToUSDT: PayEasy response is unsuccessful', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'response' => $paymentResponse,
+                    ]);
                     return response()->json($paymentResponse);
                 }
 
                 $walletAddress = $paymentResponse['walletAddress'] ?? null;
                 if (!$walletAddress) {
+                    Log::warning('CardToUSDT: walletAddress missing in PayEasy response', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'response' => $paymentResponse,
+                    ]);
                     return response()->json([
                         'success' => false,
                         'message' => 'Payment could not be initialized. Please try again.',
@@ -577,8 +612,21 @@ class PaymentController extends Controller
                     'address' => $walletAddress,
                     'callback' => $callback,
                 ]);
+                Log::info('CardToUSDT: wallet.php response', [
+                    'order_id' => $order->id,
+                    'token' => $token,
+                    'http_status' => $walletResponse->status(),
+                    'ok' => $walletResponse->ok(),
+                    'wallet_address' => $walletAddress,
+                    'body' => $walletResponse->json() ?? $walletResponse->body(),
+                ]);
 
                 if (!$walletResponse->ok()) {
+                    Log::warning('CardToUSDT: wallet.php request failed', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'http_status' => $walletResponse->status(),
+                    ]);
                     return response()->json([
                         'success' => false,
                         'message' => 'Payment could not be initialized. Please try again.',
@@ -588,6 +636,11 @@ class PaymentController extends Controller
                 $walletData = $walletResponse->json();
                 $payAddress = is_array($walletData) ? ($walletData['address_in'] ?? null) : null;
                 if (!$payAddress) {
+                    Log::warning('CardToUSDT: wallet.php response missing address_in', [
+                        'order_id' => $order->id,
+                        'token' => $token,
+                        'wallet_data' => $walletData,
+                    ]);
                     return response()->json([
                         'success' => false,
                         'message' => 'Payment could not be initialized. Please try again.',
