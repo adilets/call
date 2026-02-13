@@ -607,18 +607,18 @@ class PaymentController extends Controller
                     ], 502);
                 }
 
-                $nonce = Str::random(16);
                 $callback = 'https://webhook.getsecurepay.net?' . http_build_query([
                     'order_id' => $order->id,
-                    'nonce' => $nonce,
+                    'nonce' => Str::random(),
                     'p_id' => $paymentResponse['id'] ?? null,
                     'token' => $token,
                 ]);
 
                 $walletResponse = Http::timeout(20)->get('https://cardtousdt.getsecurepay.net/control/wallet.php', [
                     'address' => $walletAddress,
-                    'callback' => $callback,
+                    'callback' => urlencode($callback),
                 ]);
+
                 Log::info('CardToUSDT: wallet.php response', [
                     'order_id' => $order->id,
                     'token' => $token,
@@ -660,12 +660,11 @@ class PaymentController extends Controller
                 $amountFormatted = number_format((float) $amount, 2, '.', '');
                 $email = urlencode((string) ($validated['email'] ?? optional($order->customer)->email ?? ''));
 
-                $redirectUrl = 'https://checkout.getsecurepay.net/pay.php?' . http_build_query([
-                    'address' => $payAddress,
-                    'amount' => $amountFormatted,
-                    'email' => $email,
-                    'currency' => $currency,
-                ]);
+                $redirectUrl =
+                    'https://checkout.getsecurepay.net/pay.php?address=' . $payAddress .
+                    '&amount=' . $amountFormatted .
+                    '&currency=' . $currency .
+                    '&email=' . $email;
 
                 return response()->json([
                     'success' => true,
