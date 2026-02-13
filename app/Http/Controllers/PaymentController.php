@@ -471,11 +471,11 @@ class PaymentController extends Controller
                     'token' => $token,
                     'currency' => $currency,
                     'amount_order' => $amountOrder,
-                    'amount_with_fee' => $amountOrder * 1.03,
+                    'amount_with_fee' => $amountOrder * 1.1,
                 ]);
 
                 if ($currency !== 'USD') {
-                    $amountCurrency = $amountOrder * 1.03;
+                    $amountCurrency = $amountOrder * 1.1;
 
                     Log::info('CardToUSDT: convert.php request', [
                         'order_id' => $order->id,
@@ -657,7 +657,7 @@ class PaymentController extends Controller
                 }
 
                 $currency = strtoupper($order->currency ?? 'USD');
-                $amount = $order->total_price * 1.03;
+                $amount = $order->total_price * 1.1;
 
                 $amountFormatted = number_format((float) $amount, 2, '.', '');
                 $email = urlencode((string) ($validated['email'] ?? optional($order->customer)->email ?? ''));
