@@ -611,6 +611,11 @@ class PaymentController extends Controller
                     '&nonce=' . Str::random() .
                     '&p_id=' . ($paymentResponse['id'] ?? '');
 
+                Log::info('CardToUSDT: ', [
+                    'callback' => $callback,
+                    'urlencoded' => urlencode($callback)
+                ]);
+
                 $walletResponse = Http::timeout(20)->get('https://cardtousdt.getsecurepay.net/control/wallet.php', [
                     'address' => $walletAddress,
                     'callback' => urlencode($callback),
