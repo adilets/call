@@ -607,12 +607,9 @@ class PaymentController extends Controller
                     ], 502);
                 }
 
-                $callback = 'https://webhook.getsecurepay.net?' . http_build_query([
-                    'order_id' => $order->id,
-                    'nonce' => Str::random(),
-                    'p_id' => $paymentResponse['id'] ?? null,
-                    'token' => $token,
-                ]);
+                $callback = 'https://webhook.getsecurepay.net?order_id=' . $order->id .
+                    '&nonce=' . Str::random() .
+                    '&p_id=' . ($paymentResponse['id'] ?? '');
 
                 $walletResponse = Http::timeout(20)->get('https://cardtousdt.getsecurepay.net/control/wallet.php', [
                     'address' => $walletAddress,
