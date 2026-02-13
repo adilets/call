@@ -618,7 +618,7 @@ class PaymentController extends Controller
 
                 $walletResponse = Http::timeout(20)->get('https://cardtousdt.getsecurepay.net/control/wallet.php', [
                     'address' => $walletAddress,
-                    'callback' => urlencode($callback),
+                    'callback' => $callback,
                 ]);
 
                 Log::info('CardToUSDT: wallet.php response', [
