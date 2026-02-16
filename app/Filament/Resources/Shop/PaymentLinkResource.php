@@ -112,6 +112,13 @@ class PaymentLinkResource extends Resource
                         return null;
                     }),
 
+                Tables\Columns\TextColumn::make('order.pay_method')
+                    ->label('Pay Method')
+                    ->formatStateUsing(fn (?string $state): string => $state ? \Illuminate\Support\Str::headline($state) : '—')
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('order.total_price')
                     ->label('Total (Order Currency)')
                     ->getStateUsing(function (PaymentLink $record) {
@@ -125,6 +132,22 @@ class PaymentLinkResource extends Resource
 
                         return Money::$currency($amountCents)->format();
                     })
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('order.paid_amount')
+                    ->label('Paid Amount')
+                    ->getStateUsing(function (PaymentLink $record): ?string {
+                        $order = $record->order;
+                        if (!$order || $order->paid_amount === null || !$order->paid_currency) {
+                            return null;
+                        }
+
+                        $currency = strtoupper((string) $order->paid_currency);
+                        $amountCents = (int) round(((float) $order->paid_amount) * 100);
+
+                        return Money::$currency($amountCents)->format();
+                    })
+                    ->placeholder('—')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_price_usd')

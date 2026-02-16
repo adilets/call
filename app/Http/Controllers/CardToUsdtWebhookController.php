@@ -15,7 +15,7 @@ class CardToUsdtWebhookController extends Controller
         $validated = $request->validate([
             'orderId' => 'required|integer|exists:orders,id',
             'status' => 'required',
-            'amount' => 'required',
+            'amount' => 'required|float',
             'currency' => 'required',
             'id' => 'required|integer',
         ]);
@@ -41,8 +41,14 @@ class CardToUsdtWebhookController extends Controller
             ], 404);
         }
 
+
+
         /** @var Order|null $order */
         $order = Order::query()->find($orderId);
+        $order->pay_method = 'cardtousdt';
+        $order->paid_amount = ($order->paid_amount ?? 0) + $validated['amount'];
+        $order->paid_currency = strtoupper((string) $validated['currency']);
+        $order->save();
 
         $status = $validated['status'];
 
@@ -58,8 +64,6 @@ class CardToUsdtWebhookController extends Controller
 
         if ($status == 'PARTIALLY_PAID') {
             $order->status = OrderStatus::PartiallyPaid;
-            $order->paid_amount = (float) $validated['amount'];
-            $order->paid_currency = strtoupper((string) $validated['currency']);
             $order->save();
 
             return response()->json([

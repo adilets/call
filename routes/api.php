@@ -5,6 +5,7 @@ use App\Http\Controllers\CardToUsdtWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ZelleWebhookController;
+use App\Http\Controllers\VenmoWebhookController;
 use App\Http\Controllers\AirwallexWebhookController;
 
 Route::get('/user', function (Request $request) {
@@ -13,6 +14,7 @@ Route::get('/user', function (Request $request) {
 
 // Zelle webhook to mark order as paid
 Route::post('/webhooks/zelle', ZelleWebhookController::class);
+Route::post('/webhooks/venmo', VenmoWebhookController::class);
 
 Route::post('/webhooks/card', CardWebhookController::class);
 Route::post('/webhooks/airwallex', AirwallexWebhookController::class);

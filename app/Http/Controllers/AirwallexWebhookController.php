@@ -18,14 +18,14 @@ class AirwallexWebhookController extends Controller
             'orderId' => 'required|integer|exists:orders,id',
             'status' => 'required',
             'amount' => 'required',
-            'currency' => 'required'
+            'currency' => 'required',
+            'id' => 'required|integer',
         ]);
 
         /** @var Order|null $order */
         $order = Order::query()->find($validated['orderId']);
-        if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
-        }
+
+        $order->pay_method = 'airwallex';
 
         if ($validated['status'] == 'PARTIALLY_PAID') {
             $order->status = OrderStatus::PartiallyPaid;
@@ -46,19 +46,13 @@ class AirwallexWebhookController extends Controller
         $order->status = OrderStatus::Paid;
         $order->save();
 
-        $amount = Money::USD((int) round($order->total_price * 100))
-            ->convert(new Currency($order->currency ?? 'USD'), $order->rate ?? 1)
-            ->format();
-
-        $ref = 'OR-' . $order->id;
-        $message = "Hi, we’ve received your bank transfer for order #$ref ($amount). Thank you!";
-
-        if (optional($order->customer)->phone) {
-            app(SmsService::class)->send(
-                $order->customer->phone,
-                $message
-            );
-        }
+        $order->payments()->create([
+            'reference' => $validated['id'],
+            'provider' => 'airwallex',
+            'method' => 'airwallex',
+            'amount' => $validated['amount'],
+            'currency' => $validated['currency'],
+        ]);
 
         return response()->json([
             'success' => true,

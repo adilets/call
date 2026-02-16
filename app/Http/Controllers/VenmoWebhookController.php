@@ -10,32 +10,39 @@ use App\Services\Sms\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class CardWebhookController extends Controller {
-    public function __invoke(Request $request): JsonResponse {
+class VenmoWebhookController extends Controller
+{
+    public function __invoke(Request $request): JsonResponse
+    {
         $validated = $request->validate([
+            'id' => 'required|integer',
             'orderId' => 'required|integer|exists:orders,id',
-            'descriptor' => 'required|string',
-            'id' => 'integer|required',
-            'currency' => 'string|required',
-            'amount' => 'float|required',
+            'status' => 'required|string',
+            'amount' => 'required|float',
         ]);
 
         /** @var Order|null $order */
         $order = Order::query()->find($validated['orderId']);
 
-        $order->status = OrderStatus::Paid;
-        $order->pay_method = 'card';
+        $order->pay_method = 'venmo';
         $order->paid_amount = $validated['amount'];
-        $order->paid_currency = $validated['currency'];
-        $order->save();
+        $order->paid_currnecy = 'USD';
+
+        if ($validated['status'] == 'PARTIALLY_PAID') {
+            $order->status = OrderStatus::PartiallyPaid;
+        } else if ($validated['status'] == 'CAPTURED') {
+            $order->status = OrderStatus::Paid;
+        }
 
         $order->payments()->create([
             'reference' => $validated['id'],
-            'provider' => 'card',
-            'method' => 'card',
+            'provider' => 'venmo',
+            'method' => 'venmo',
             'amount' => $validated['amount'],
-            'currency' => $validated['currency'],
+            'currency' => 'USD',
         ]);
+
+        $order->save();
 
         return response()->json([
             'success' => true,
@@ -44,3 +51,4 @@ class CardWebhookController extends Controller {
         ]);
     }
 }
+
