@@ -15,7 +15,7 @@ class CardToUsdtWebhookController extends Controller
         $validated = $request->validate([
             'orderId' => 'required|integer|exists:orders,id',
             'status' => 'required',
-            'amount' => 'required|float',
+            'amount' => 'required',
             'currency' => 'required',
             'id' => 'required|integer',
         ]);
@@ -40,8 +40,6 @@ class CardToUsdtWebhookController extends Controller
                 'message' => 'Payment link not found.',
             ], 404);
         }
-
-
 
         /** @var Order|null $order */
         $order = Order::query()->find($orderId);
