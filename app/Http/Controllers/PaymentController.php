@@ -657,7 +657,7 @@ class PaymentController extends Controller
                 }
 
                 $currency = strtoupper($order->currency ?? 'USD');
-                $amount = $order->total_price * 1.1;
+                $amount = $order->total_price * 1.05;
 
                 $amountFormatted = number_format((float) $amount, 2, '.', '');
                 $email = urlencode((string) ($validated['email'] ?? optional($order->customer)->email ?? ''));

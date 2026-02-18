@@ -615,7 +615,7 @@
     const ORDER_RATE = {{ number_format((float) ($order->rate ?? $selectedRate ?? 1), 6, '.', '') }};
 
     let PAY_METHOD = null;
-    const CARDTOUSDT_FEE_RATE = 0.03;
+    const CARDTOUSDT_FEE_RATE = 0.05;
     function getSymbolByCurrency(code){
         const c = String(code || '').toUpperCase();
         return CURRENCY_SYMBOLS[c] || currentSymbol || c;
