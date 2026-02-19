@@ -4,9 +4,9 @@ namespace App\Filament\Resources\Shop;
 
 use Akaunting\Money\Money;
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Concerns\AppliesRoleScope;
 use App\Filament\Resources\Shop\PaymentLinkResource\Pages;
 use App\Models\PaymentLink;
-use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 
 class PaymentLinkResource extends Resource
 {
+    use AppliesRoleScope;
+
     protected static ?string $model = PaymentLink::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-link';
@@ -201,29 +203,7 @@ class PaymentLinkResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()->with('order');
-
-        $user = Auth::user();
-        if (!$user) {
-            return $query->whereRaw('1=0');
-        }
-
-        if ($user instanceof User && method_exists($user, 'hasRole')) {
-            if ($user->hasRole('admin')) {
-                return $query;
-            }
-
-            if ($user->hasRole('manager')) {
-                return $query->whereHas('order', fn (Builder $q) => $q->where('client_id', $user->client_id));
-            }
-
-            if ($user->hasRole('operator')) {
-                return $query->whereHas('order', fn (Builder $q) => $q->where('user_id', $user->id));
-            }
-
-            return $query->whereRaw('1=0');
-        }
-
-        return $query->whereHas('order', fn (Builder $q) => $q->where('client_id', $user->client_id));
+        return $query->whereHas('order', fn (Builder $orderQuery) => self::applyRoleScope($orderQuery));
     }
 
     protected static function getCurrencyOptions(): array
