@@ -48,12 +48,6 @@ class CreatePaymentLink extends CreateRecord
             ->orderBy('name')
             ->value('id');
 
-        if (!$shippingMethodId) {
-            throw ValidationException::withMessages([
-                'price' => ['No enabled shipping method found for this client.'],
-            ]);
-        }
-
         $order = Order::create([
             'client_id' => $user->client_id,
             'user_id' => $user->getAuthIdentifier(),
@@ -61,7 +55,7 @@ class CreatePaymentLink extends CreateRecord
             'currency' => $currency,
             'total_price' => round($price, 2),
             'shipping_price' => 0,
-            'shipping_method_id' => $shippingMethodId,
+            'shipping_method_id' => $shippingMethodId ?: null,
             'rate' => $rate,
         ]);
 
