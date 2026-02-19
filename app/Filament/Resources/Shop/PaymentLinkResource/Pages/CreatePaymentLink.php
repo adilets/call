@@ -17,6 +17,11 @@ class CreatePaymentLink extends CreateRecord
 {
     protected static string $resource = PaymentLinkResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function handleRecordCreation(array $data): Model
     {
         $user = Auth::user();
