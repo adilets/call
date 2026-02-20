@@ -17,7 +17,7 @@ class CardWebhookController extends Controller {
             'descriptor' => 'required|string',
             'id' => 'integer|required',
             'currency' => 'string|required',
-            'amount' => 'float|required',
+            'amount' => 'required|numeric',
         ]);
 
         /** @var Order|null $order */

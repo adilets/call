@@ -99,7 +99,37 @@ class PayEasyService
             ];
         }
 
-        return $response->json();
+        try {
+            $decoded = $response->json();
+        } catch (\Throwable $exception) {
+            Log::warning('PayEasy chargeCard returned invalid JSON', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->body(),
+                'message' => 'Invalid payment provider response',
+            ];
+        }
+
+        if (! is_array($decoded)) {
+            Log::warning('PayEasy chargeCard returned non-array JSON payload', [
+                'status' => $response->status(),
+                'decoded_type' => gettype($decoded),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->body(),
+                'message' => 'Invalid payment provider response',
+            ];
+        }
+
+        return $decoded;
     }
 }
 

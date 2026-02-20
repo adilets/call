@@ -15,7 +15,7 @@ class CardToUsdtWebhookController extends Controller
         $validated = $request->validate([
             'orderId' => 'required|integer|exists:orders,id',
             'status' => 'required',
-            'amount' => 'required',
+            'amount' => 'required|numeric',
             'currency' => 'required',
             'id' => 'required|integer',
         ]);

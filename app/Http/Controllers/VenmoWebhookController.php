@@ -18,7 +18,7 @@ class VenmoWebhookController extends Controller
             'id' => 'required|integer',
             'orderId' => 'required|integer|exists:orders,id',
             'status' => 'required|string',
-            'amount' => 'required|float',
+            'amount' => 'required|numeric',
         ]);
 
         /** @var Order|null $order */
