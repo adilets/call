@@ -26,7 +26,7 @@ class ZelleWebhookController extends Controller
 
         $order->pay_method = 'zelle';
         $order->paid_amount = $validated['amount'];
-        $order->paid_currnecy = 'USD';
+        $order->paid_currency = 'USD';
 
         if ($validated['status'] == 'PARTIALLY_PAID') {
             $order->status = OrderStatus::PartiallyPaid;
