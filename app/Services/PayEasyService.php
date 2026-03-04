@@ -63,7 +63,7 @@ class PayEasyService
             'country' => optional($order->address)->country,
             'phone' => optional($order->customer)->phone,
             'number' => $order->number,
-            'ipaddress' => request()->ip(),
+            'ipaddress' => $this->resolveClientIp(),
             'payMethod' => $order->pay_method,
             'returnUrl' => $params['returnUrl'],
             'pp' => 'cc',
@@ -130,6 +130,28 @@ class PayEasyService
         }
 
         return $decoded;
+    }
+
+    private function resolveClientIp(): ?string
+    {
+        $request = request();
+
+        $cfIp = trim((string) $request->header('CF-Connecting-IP', ''));
+        if ($cfIp !== '' && filter_var($cfIp, FILTER_VALIDATE_IP)) {
+            return $cfIp;
+        }
+
+        $forwardedFor = (string) $request->header('X-Forwarded-For', '');
+        if ($forwardedFor !== '') {
+            foreach (explode(',', $forwardedFor) as $candidate) {
+                $ip = trim($candidate);
+                if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return $request->ip();
     }
 }
 
