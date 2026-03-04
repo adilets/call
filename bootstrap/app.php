@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
-use TypeError;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(

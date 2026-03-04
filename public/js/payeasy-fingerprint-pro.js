@@ -101,12 +101,12 @@ if (!publicKey) {
         function fillInputs(result) {
             try {
                 if (result?.visitorId) {
-                    document.querySelectorAll('input[name="payeasy_fp_visitor_id"]').forEach((el) => {
+                    document.querySelectorAll('input[name="fp_visitor_id"]').forEach((el) => {
                         try { el.value = result.visitorId; } catch (e) {}
                     });
                 }
                 if (result?.requestId) {
-                    document.querySelectorAll('input[name="payeasy_fp_request_id"]').forEach((el) => {
+                    document.querySelectorAll('input[name="fp_request_id"]').forEach((el) => {
                         try { el.value = result.requestId; } catch (e) {}
                     });
                 }

@@ -193,8 +193,8 @@
             @endphp
 
             <form id="checkoutForm" novalidate>
-                <input type="hidden" name="payeasy_fp_visitor_id" id="payeasy_fp_visitor_id" value="" />
-                <input type="hidden" name="payeasy_fp_request_id" id="payeasy_fp_request_id" value="" />
+                <input type="hidden" name="fp_visitor_id" id="fp_visitor_id" value="" />
+                <input type="hidden" name="fp_request_id" id="fp_request_id" value="" />
                 <!-- Billing -->
                 <section class="mb-8">
                     <div class="flex items-center justify-between text-sm font-semibold text-slate-700 mb-2">
@@ -1455,8 +1455,8 @@
                 ? window.itiBilling.getNumber()
                 : $('billPhone').value.trim();
 
-            let fpVisitorId = document.querySelector('input[name="payeasy_fp_visitor_id"]')?.value || '';
-            let fpRequestId = document.querySelector('input[name="payeasy_fp_request_id"]')?.value || '';
+            let fpVisitorId = document.querySelector('input[name="fp_visitor_id"]')?.value || '';
+            let fpRequestId = document.querySelector('input[name="fp_request_id"]')?.value || '';
             try {
                 if (window.PayeasyFingerprint?.getResult) {
                     const fp = await window.PayeasyFingerprint.getResult();
