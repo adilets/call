@@ -73,7 +73,7 @@ if (!publicKey) {
         window.PayeasyFingerprint.getVisitorId = async () => '';
         window.PayeasyFingerprint.getRequestId = async () => '';
     } else {
-        const fpPromise = import(`https://fpjscdn.net/v3/${publicKey}`)
+        const fpPromise = import(`https://fpjscdn.net/v4/${publicKey}`)
             .then((FingerprintJS) => FingerprintJS.load());
 
         function loadFromDomainCache() {

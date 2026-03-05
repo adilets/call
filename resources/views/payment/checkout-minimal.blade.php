@@ -601,7 +601,7 @@
     window.PayeasyFingerprint = window.PayeasyFingerprint || {};
     window.PayeasyFingerprint.publicKey = @json($fingerprintPublicKey ?? '');
 </script>
-<script type="module" src="{{ asset('js/payeasy-fingerprint-pro.js') }}"></script>
+<script type="module" src="{{ asset('js/payeasy-fingerprint-pro.js?v=1.0.1') }}"></script>
 <script>
     // Data from server
     const SELECTED_RATE = {{ number_format($selectedRate, 6, '.', '') }};
