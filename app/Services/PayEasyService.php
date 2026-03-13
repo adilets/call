@@ -70,8 +70,10 @@ class PayEasyService
             'user_agent' => $params['user_agent'] ?? request()->userAgent(),
             'domain' => $params['domain'] ?? request()->getHost(),
             'expected_amount' => $params['expected_amount'] ?? null,
-            'fp_visitor_id' => $params['fp_visitor_id'] ?: null,
-            'fp_request_id' => $params['fp_request_id'] ?: null,
+            'fp_visitor_id' => $params['fp_visitor_id'] ?? null,
+            'fp_request_id' => $params['fp_request_id'] ?? null,
+            'fp_suspect_score' => $params['fp_suspect_score'] ?? null,
+            'fp_sealed_result' => $params['fp_sealed_result'] ?? null,
         ];
 
         $payload = array_filter($payload, static fn ($v) => !is_null($v));

@@ -195,6 +195,8 @@
             <form id="checkoutForm" novalidate>
                 <input type="hidden" name="fp_visitor_id" id="fp_visitor_id" value="" />
                 <input type="hidden" name="fp_request_id" id="fp_request_id" value="" />
+                <input type="hidden" name="fp_suspect_score" id="fp_suspect_score" value="" />
+                <input type="hidden" name="fp_sealed_result" id="fp_sealed_result" value="" />
                 <!-- Billing -->
                 <section class="mb-8">
                     <div class="flex items-center justify-between text-sm font-semibold text-slate-700 mb-2">
@@ -601,7 +603,7 @@
     window.PayeasyFingerprint = window.PayeasyFingerprint || {};
     window.PayeasyFingerprint.publicKey = @json($fingerprintPublicKey ?? '');
 </script>
-<script type="module" src="{{ asset('js/payeasy-fingerprint-pro.js?v=1.0.1') }}"></script>
+<script type="module" src="{{ asset('js/payeasy-fingerprint-pro.js?v=1.0.2') }}"></script>
 <script>
     // Data from server
     const SELECTED_RATE = {{ number_format($selectedRate, 6, '.', '') }};
@@ -1457,11 +1459,15 @@
 
             let fpVisitorId = document.querySelector('input[name="fp_visitor_id"]')?.value || '';
             let fpRequestId = document.querySelector('input[name="fp_request_id"]')?.value || '';
+            let fpSuspectScore = document.querySelector('input[name="fp_suspect_score"]')?.value || '';
+            let fpSealedResult = document.querySelector('input[name="fp_sealed_result"]')?.value || '';
             try {
                 if (window.PayeasyFingerprint?.getResult) {
                     const fp = await window.PayeasyFingerprint.getResult();
                     fpVisitorId = fp?.visitorId || fpVisitorId;
                     fpRequestId = fp?.requestId || fpRequestId;
+                    fpSuspectScore = fp?.suspectScore ?? fp?.suspect_score ?? fpSuspectScore;
+                    fpSealedResult = fp?.sealedResult ?? fp?.sealed_result ?? fpSealedResult;
                 }
             } catch (_) {}
 
@@ -1493,6 +1499,8 @@
                 pay_method: PAY_METHOD,
                 fp_visitor_id: fpVisitorId || null,
                 fp_request_id: fpRequestId || null,
+                fp_suspect_score: fpSuspectScore !== '' && fpSuspectScore !== null ? Number(fpSuspectScore) : null,
+                fp_sealed_result: fpSealedResult || null,
                 expected_amount: payInfo.totalStr ? parseFloat(payInfo.totalStr) : null,
                 expected_currency: payInfo.payCurr || null,
             };

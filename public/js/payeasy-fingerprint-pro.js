@@ -6,11 +6,13 @@ window.PayeasyFingerprint = window.PayeasyFingerprint || {};
 if (!publicKey) {
     window.PayeasyFingerprint.cookiesAvailable = false;
     window.PayeasyFingerprint.isAllowed = false;
-    window.PayeasyFingerprint.getResult = async () => ({ visitorId: '', requestId: '' });
+    window.PayeasyFingerprint.getResult = async () => ({ visitorId: '', requestId: '', suspectScore: null, sealedResult: null });
     window.PayeasyFingerprint.getVisitorId = async () => '';
     window.PayeasyFingerprint.getRequestId = async () => '';
+    window.PayeasyFingerprint.getSuspectScore = async () => null;
+    window.PayeasyFingerprint.getSealedResult = async () => null;
 } else {
-    window.PayeasyFingerprint._result = window.PayeasyFingerprint._result || null; // { visitorId, requestId }
+    window.PayeasyFingerprint._result = window.PayeasyFingerprint._result || null; // { visitorId, requestId, suspectScore, sealedResult }
     window.PayeasyFingerprint._resultPromise = window.PayeasyFingerprint._resultPromise || null;
 
     const LS_KEY = 'payeasy_fp_cache_v1';
@@ -69,12 +71,60 @@ if (!publicKey) {
 
     if (!cookiesOk) {
         // If cookies are blocked, we do not call Fingerprint at all.
-        window.PayeasyFingerprint.getResult = async () => ({ visitorId: '', requestId: '' });
+        window.PayeasyFingerprint.getResult = async () => ({ visitorId: '', requestId: '', suspectScore: null, sealedResult: null });
         window.PayeasyFingerprint.getVisitorId = async () => '';
         window.PayeasyFingerprint.getRequestId = async () => '';
+        window.PayeasyFingerprint.getSuspectScore = async () => null;
+        window.PayeasyFingerprint.getSealedResult = async () => null;
     } else {
-        const fpPromise = import(`https://fpjscdn.net/v4/${publicKey}`)
-            .then((FingerprintJS) => FingerprintJS.load());
+        const fpPromise = import( `https://fpjscdn.net/v4/${ publicKey }` )
+            .then((fpModule) => {
+                const FingerprintJS = fpModule?.default || fpModule;
+                if ( FingerprintJS && typeof FingerprintJS.load === 'function' ) {
+                    return FingerprintJS.load();
+                }
+                if ( FingerprintJS && typeof FingerprintJS.start === 'function' ) {
+                    return FingerprintJS.start();
+                }
+                throw new Error( 'FingerprintJS v4 loader unavailable' );
+            } );
+
+        function normalizeResult(raw) {
+            const visitorId =
+                (typeof raw?.visitorId === 'string' && raw.visitorId) ||
+                (typeof raw?.visitor_id === 'string' && raw.visitor_id) ||
+                '';
+
+            const requestId =
+                (typeof raw?.requestId === 'string' && raw.requestId) ||
+                (typeof raw?.request_id === 'string' && raw.request_id) ||
+                (typeof raw?.eventId === 'string' && raw.eventId) ||
+                (typeof raw?.event_id === 'string' && raw.event_id) ||
+                '';
+
+            const suspectRaw =
+                raw?.suspectScore ??
+                raw?.suspect_score ??
+                null;
+            const suspectScore = Number.isFinite(Number(suspectRaw)) ? Number(suspectRaw) : null;
+
+            const sealedResult =
+                (typeof raw?.sealedResult === 'string' && raw.sealedResult) ||
+                (typeof raw?.sealed_result === 'string' && raw.sealed_result) ||
+                null;
+
+            return {
+                visitorId,
+                requestId,
+                suspectScore,
+                sealedResult,
+                // aliases for convenience / backward compatibility
+                visitor_id: visitorId,
+                event_id: requestId,
+                suspect_score: suspectScore,
+                sealed_result: sealedResult,
+            };
+        }
 
         function loadFromDomainCache() {
             const raw = safeCookieGet(LS_KEY);
@@ -83,10 +133,17 @@ if (!publicKey) {
                 const parsed = JSON.parse(raw);
                 const visitorId = typeof parsed?.visitorId === 'string' ? parsed.visitorId : '';
                 const requestId = typeof parsed?.requestId === 'string' ? parsed.requestId : '';
+                const suspectScore = Number.isFinite(Number(parsed?.suspectScore ?? parsed?.suspect_score))
+                    ? Number(parsed?.suspectScore ?? parsed?.suspect_score)
+                    : null;
+                const sealedResult =
+                    (typeof parsed?.sealedResult === 'string' && parsed.sealedResult) ||
+                    (typeof parsed?.sealed_result === 'string' && parsed.sealed_result) ||
+                    null;
                 const ts = typeof parsed?.ts === 'number' ? parsed.ts : 0;
                 if (!visitorId || !requestId || !ts) return null;
                 if (Date.now() - ts > LS_TTL_MS) return null;
-                return { visitorId, requestId };
+                return normalizeResult({ visitorId, requestId, suspectScore, sealedResult });
             } catch (e) {
                 return null;
             }
@@ -94,7 +151,13 @@ if (!publicKey) {
 
         function saveToDomainCache(result) {
             if (!result?.visitorId || !result?.requestId) return;
-            const payload = JSON.stringify({ visitorId: result.visitorId, requestId: result.requestId, ts: Date.now() });
+            const payload = JSON.stringify({
+                visitorId: result.visitorId,
+                requestId: result.requestId,
+                suspectScore: result.suspectScore ?? null,
+                sealedResult: result.sealedResult ?? null,
+                ts: Date.now(),
+            });
             safeCookieSet(LS_KEY, payload, Math.ceil(LS_TTL_MS / 1000));
         }
 
@@ -110,6 +173,12 @@ if (!publicKey) {
                         try { el.value = result.requestId; } catch (e) {}
                     });
                 }
+                document.querySelectorAll('input[name="fp_suspect_score"]').forEach((el) => {
+                    try { el.value = result?.suspectScore ?? ''; } catch (e) {}
+                });
+                document.querySelectorAll('input[name="fp_sealed_result"]').forEach((el) => {
+                    try { el.value = result?.sealedResult ?? ''; } catch (e) {}
+                });
             } catch (e) {}
         }
 
@@ -123,6 +192,8 @@ if (!publicKey) {
                 window.PayeasyFingerprint._result = cached;
                 window.PayeasyFingerprint.visitorId = cached.visitorId;
                 window.PayeasyFingerprint.requestId = cached.requestId;
+                window.PayeasyFingerprint.suspectScore = cached.suspectScore ?? null;
+                window.PayeasyFingerprint.sealedResult = cached.sealedResult ?? null;
                 return Promise.resolve(cached);
             }
 
@@ -134,18 +205,20 @@ if (!publicKey) {
                 try {
                     const fp = await fpPromise;
                     const r = await fp.get();
-                    const visitorId = r?.visitorId || '';
-                    const requestId = r?.requestId || '';
-                    const result = { visitorId, requestId };
+                    const result = normalizeResult(r);
+                    const visitorId = result.visitorId;
+                    const requestId = result.requestId;
                     if (visitorId && requestId) {
                         window.PayeasyFingerprint._result = result;
                         window.PayeasyFingerprint.visitorId = visitorId;
                         window.PayeasyFingerprint.requestId = requestId;
+                        window.PayeasyFingerprint.suspectScore = result.suspectScore ?? null;
+                        window.PayeasyFingerprint.sealedResult = result.sealedResult ?? null;
                         saveToDomainCache(result);
                     }
                     return result;
                 } catch (e) {
-                    return { visitorId: '', requestId: '' };
+                    return { visitorId: '', requestId: '', suspectScore: null, sealedResult: null };
                 }
             })();
 
@@ -154,6 +227,8 @@ if (!publicKey) {
 
         window.PayeasyFingerprint.getVisitorId = async () => (await window.PayeasyFingerprint.getResult()).visitorId || '';
         window.PayeasyFingerprint.getRequestId = async () => (await window.PayeasyFingerprint.getResult()).requestId || '';
+        window.PayeasyFingerprint.getSuspectScore = async () => (await window.PayeasyFingerprint.getResult()).suspectScore ?? null;
+        window.PayeasyFingerprint.getSealedResult = async () => (await window.PayeasyFingerprint.getResult()).sealedResult ?? null;
 
         // Run immediately on page load (uses domain cache if available).
         const run = () => {

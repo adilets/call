@@ -262,6 +262,8 @@ class PaymentController extends Controller
             'pay_method' => ['nullable', Rule::in($allowedCodes)],
             'fp_visitor_id' => 'nullable|string|max:128',
             'fp_request_id' => 'nullable|string|max:128',
+            'fp_suspect_score' => 'nullable|numeric',
+            'fp_sealed_result' => 'nullable|string|max:20000',
         ];
 
         // Card fields required only when paying by card
@@ -433,6 +435,8 @@ class PaymentController extends Controller
         if ($payMethod === 'airwallex') {
             $fpVisitorId = $validated['fp_visitor_id'] ?? null;
             $fpRequestId = $validated['fp_request_id'] ?? null;
+            $fpSuspectScore = $validated['fp_suspect_score'] ?? null;
+            $fpSealedResult = $validated['fp_sealed_result'] ?? null;
 
             return response()->json([
                 'success' => true,
@@ -441,6 +445,8 @@ class PaymentController extends Controller
                     'token' => $token,
                     'fp_visitor_id' => $fpVisitorId,
                     'fp_request_id' => $fpRequestId,
+                    'fp_suspect_score' => $fpSuspectScore,
+                    'fp_sealed_result' => $fpSealedResult,
                 ]),
             ]);
         }
@@ -458,6 +464,8 @@ class PaymentController extends Controller
                 'email'      => $validated['email'] ?? optional($order->customer)->email,
                 'fp_visitor_id' => $validated['fp_visitor_id'] ?? null,
                 'fp_request_id' => $validated['fp_request_id'] ?? null,
+                'fp_suspect_score' => $validated['fp_suspect_score'] ?? null,
+                'fp_sealed_result' => $validated['fp_sealed_result'] ?? null,
             ];
 
             if ($payMethod === 'cardtousdt') {
@@ -772,6 +780,8 @@ class PaymentController extends Controller
                     'email'      => optional($order->customer)->email,
                     'fp_visitor_id' => request()->input('fp_visitor_id'),
                     'fp_request_id' => request()->input('fp_request_id'),
+                    'fp_suspect_score' => request()->input('fp_suspect_score'),
+                    'fp_sealed_result' => request()->input('fp_sealed_result'),
                 ]);
             } catch (\Throwable $e) {
                 Log::warning('Airwallex (meta) failed', ['error' => $e->getMessage()]);
