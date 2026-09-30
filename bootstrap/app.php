@@ -21,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('app:orders-expire-by-link')->everyTenMinutes()->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->appendToGroup('web', \App\Http\Middleware\ThrottleAuthRoutes::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (\Throwable $exception): void {
