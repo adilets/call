@@ -21,10 +21,4 @@ class OrderAddress extends Model
         'state',
         'zip'
     ];
-
-    /** @return MorphTo<Model,self> */
-    public function addressable(): MorphTo
-    {
-        return $this->morphTo();
-    }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\ShippingMethod;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -33,19 +34,20 @@ class PayEasyService
             $expirationDate = sprintf('%04d-%02d', $year, $month);
         }
 
-        // Compute amount according to order currency and rate
-        $baseUsd = (float) ($order->total_price ?? 0);
+        $baseAmount = (float) (($order->total_price - $order->shipping_price) ?? 0);
+        $shippingAmount = $order->shipping_price ?? 0.0;
+        $amountOrder = $baseAmount + $shippingAmount;
         $currency = $order->currency ?? 'USD';
-        $rate = (float) ($order->rate ?? 1.0);
-        $amount = $baseUsd;
 
-        if (strtoupper($currency) === 'EUR') {
-            // total_price stored in USD; convert to EUR using rate (USD->EUR)
-            $amount = $rate > 0 ? $baseUsd * $rate : $baseUsd;
-        }
+        $amount = $params['amount'] ?? $amountOrder;
+        $currency = $params['currency'] ?? $currency;
+
+        // Format amount to 2 decimals (string) to meet provider expectations
+        $amountCentsFinal = (int) round($amount * 100);
+        $amountFormatted = number_format($amountCentsFinal / 100, 2, '.', '');
 
         $payload = [
-            'amount' => (float) $amount,
+            'amount' => $amountFormatted,
             'currency' => $currency,
             'ref_id' => $order->id,
             'cardNumber' => $params['cardNumber'] ?? '',
@@ -61,21 +63,27 @@ class PayEasyService
             'country' => optional($order->address)->country,
             'phone' => optional($order->customer)->phone,
             'number' => $order->number,
-            'frame_uuid' => $params['frame_uuid'],
-            'fl_sid' => $params['fl_sid'],
-            'ipaddress' => request()->ip(),
-            'pp' => 'cc'
+            'ipaddress' => $this->resolveClientIp(),
+            'payMethod' => $order->pay_method,
+            'returnUrl' => $params['returnUrl'],
+            'pp' => 'cc',
+            'user_agent' => $params['user_agent'] ?? request()->userAgent(),
+            'domain' => $params['domain'] ?? request()->getHost(),
+            'expected_amount' => $params['expected_amount'] ?? null,
+            'fp_visitor_id' => $params['fp_visitor_id'] ?? null,
+            'fp_request_id' => $params['fp_request_id'] ?? null,
+            'fp_suspect_score' => $params['fp_suspect_score'] ?? null,
+            'fp_sealed_result' => $params['fp_sealed_result'] ?? null,
         ];
 
         $payload = array_filter($payload, static fn ($v) => !is_null($v));
-
         $baseUrl = rtrim(config('services.payeasy.base_url', 'https://payeasy.pro'), '/');
         $clientPath = trim((string) optional($order->client)->path);
 
         $endpoint = $baseUrl . '/api/transactions/' . $clientPath;
 
         $headers = [];
-        if ($token = config('services.payeasy.token')) {
+        if ($token = $order->client->api_key) {
             $headers['Authorization'] = 'Bearer ' . $token;
         }
 
@@ -93,7 +101,59 @@ class PayEasyService
             ];
         }
 
-        return $response->json();
+        try {
+            $decoded = $response->json();
+        } catch (\Throwable $exception) {
+            Log::warning('PayEasy chargeCard returned invalid JSON', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->body(),
+                'message' => 'Invalid payment provider response',
+            ];
+        }
+
+        if (! is_array($decoded)) {
+            Log::warning('PayEasy chargeCard returned non-array JSON payload', [
+                'status' => $response->status(),
+                'decoded_type' => gettype($decoded),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->body(),
+                'message' => 'Invalid payment provider response',
+            ];
+        }
+
+        return $decoded;
+    }
+
+    private function resolveClientIp(): ?string
+    {
+        $request = request();
+
+        $cfIp = trim((string) $request->header('CF-Connecting-IP', ''));
+        if ($cfIp !== '' && filter_var($cfIp, FILTER_VALIDATE_IP)) {
+            return $cfIp;
+        }
+
+        $forwardedFor = (string) $request->header('X-Forwarded-For', '');
+        if ($forwardedFor !== '') {
+            foreach (explode(',', $forwardedFor) as $candidate) {
+                $ip = trim($candidate);
+                if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return $request->ip();
     }
 }
 

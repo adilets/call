@@ -7,8 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphOne;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
@@ -27,13 +26,19 @@ class Order extends Model
     protected $fillable = [
         'number',
         'total_price',
+        'expected_amount',
+        'expected_currency',
+        'paid_amount',
+        'paid_currency',
         'shipping_price',
         'status',
         'currency',
+        'pay_method',
         'notes',
         'payeasy_transaction_id',
         'payment_link',
         'shipping_method_id',
+        'customer_id',
         'client_id',
         'user_id',
         'rate'
@@ -43,28 +48,10 @@ class Order extends Model
         'status' => OrderStatus::class,
     ];
 
-    /** @return MorphOne<OrderAddress> */
-    public function address(): MorphOne
+    /** @return HasOne<OrderAddress> */
+    public function address(): HasOne
     {
-        return $this->morphOne(OrderAddress::class, 'addressable');
-    }
-
-    /** Billing address alias for backward compatibility */
-    public function billingAddress(): MorphOne
-    {
-        return $this->morphOne(OrderAddress::class, 'addressable')->where('type', 'billing');
-    }
-
-    /** Shipping address */
-    public function shippingAddress(): MorphOne
-    {
-        return $this->morphOne(OrderAddress::class, 'addressable')->where('type', 'shipping');
-    }
-
-    /** All addresses for the order */
-    public function addresses(): MorphMany
-    {
-        return $this->morphMany(OrderAddress::class, 'addressable');
+        return $this->hasOne(OrderAddress::class, 'order_id');
     }
 
     /** @return BelongsTo<Customer,self> */

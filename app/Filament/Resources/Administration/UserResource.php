@@ -57,7 +57,10 @@ class UserResource extends Resource
                         ->label('Role')
                         ->options(Role::all()->pluck('name', 'name'))
                         ->required()
-                        ->visible(fn () => auth()->user()->hasRole('admin')),
+                        ->visible(fn () => auth()->user()->hasRole('admin'))
+                        ->afterStateHydrated(function (callable $set, ?User $record) {
+                            $set('role', $record?->getRoleNames()->first());
+                        }),
                 ])
                 ->columns(2),
 

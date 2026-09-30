@@ -4,13 +4,17 @@ namespace App\Filament\Resources\Administration;
 
 use App\Filament\Resources\Administration;
 use App\Models\Client;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use PragmaRX\Countries\Package\Countries;
 
 class ClientResource extends Resource
 {
@@ -43,6 +47,34 @@ class ClientResource extends Resource
                             ->label('PayEasy Path')
                             ->helperText('Custom path for PayEasy endpoints, provided by the provider')
                             ->maxLength(255),
+
+                        TextInput::make('api_key')
+                            ->label('API Key')
+                            ->helperText('Client API key for provider integration.')
+                            ->maxLength(255),
+
+                        Select::make('currencies')
+                            ->label('Currencies')
+                            ->multiple()
+                            ->options(self::getCurrenciesList())
+                            ->helperText('Select allowed checkout currencies.')
+                            ->preload()
+                            ->searchable(),
+
+                        Select::make('countries')
+                            ->label('Countries')
+                            ->multiple()
+                            ->options(self::getCountriesList())
+                            ->helperText('Choose which countries to show in checkout (billing/shipping).')
+                            ->preload()
+                            ->searchable(),
+
+                        Select::make('paymentMethods')
+                            ->label('Payment Methods')
+                            ->multiple()
+                            ->relationship('paymentMethods', 'name')
+                            ->preload()
+                            ->helperText('Enable/disable checkout payment methods for this client.'),
                     ])
                     ->columns(2),
             ]);
@@ -88,11 +120,43 @@ class ClientResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasRole('admin');
+        $user = Auth::user();
+
+        return $user instanceof User
+            && method_exists($user, 'hasRole')
+            && $user->hasRole('admin');
     }
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasRole('admin');
+        $user = Auth::user();
+
+        return $user instanceof User
+            && method_exists($user, 'hasRole')
+            && $user->hasRole('admin');
+    }
+
+    public static function getCountriesList(): array
+    {
+        $countries = new Countries();
+
+        return $countries->all()
+            ->mapWithKeys(fn ($country) => [
+                $country->cca2 => $country->name->common,
+            ])
+            ->sort()
+            ->toArray();
+    }
+
+    public static function getCurrenciesList(): array
+    {
+        $currencies = config('money.currencies', []);
+
+        return collect($currencies)
+            ->mapWithKeys(fn (array $meta, string $code) => [
+                $code => sprintf('%s — %s', $code, $meta['name'] ?? $code),
+            ])
+            ->sort()
+            ->toArray();
     }
 }

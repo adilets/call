@@ -21,6 +21,7 @@ class CustomerResource extends Resource
     use AppliesRoleScope;
 
     protected static ?string $model = Customer::class;
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 

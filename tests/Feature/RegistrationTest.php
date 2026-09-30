@@ -44,10 +44,12 @@ class RegistrationTest extends TestCase
             'email' => 'test@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
+            'company' => 'Test Company',
             'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature(),
         ]);
 
         $this->assertAuthenticated();
+        $this->assertDatabaseHas('clients', ['company' => 'Test Company']);
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 }
